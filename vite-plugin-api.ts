@@ -1,9 +1,11 @@
 import type { Plugin } from 'vite';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { DatabaseSync } from 'node:sqlite';
+import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
+
+const nodeRequire = createRequire(import.meta.url);
 
 interface ScrapeRequest {
   url: string;
@@ -51,7 +53,8 @@ export function apiPlugin(): Plugin {
     if (!fs.existsSync(dbPath)) {
       throw new Error(`Database file not found at ${dbPath}`);
     }
-    return new DatabaseSync(dbPath);
+    const sqlite = nodeRequire('node:sqlite');
+    return new sqlite.DatabaseSync(dbPath);
   }
 
   function sendJson(res: ServerResponse, status: number, data: unknown) {
