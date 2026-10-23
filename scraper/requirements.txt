@@ -1,0 +1,5 @@
+requests
+beautifulsoup4
+pypdf
+playwright   # only needed for --render and the delivery command; then run: playwright install chromium
+pytest
