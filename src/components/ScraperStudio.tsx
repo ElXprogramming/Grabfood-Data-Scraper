@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api/client';
 import type { Restaurant, ScrapeResult } from '../types';
+import { getGoogleMapsUrl } from '../utils/maps';
 
 interface ScraperStudioProps {
   restaurants: Restaurant[];
@@ -579,11 +580,24 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
                 {result.openingHours}
               </span>
             )}
-            {(result.address || result.lat) && (
-              <span className="meta-badge location">
+            {(result.address || result.lat || result.area) && (
+              <a
+                href={getGoogleMapsUrl({
+                  lat: result.lat,
+                  lon: result.lon,
+                  address: result.address,
+                  name: result.restaurantName,
+                  area: result.area,
+                })}
+                target="_blank"
+                rel="noreferrer"
+                className="meta-badge location location-link"
+                title="Open location on Google Maps"
+              >
                 <MapPin size={12} />
-                {result.address || `${result.lat}, ${result.lon}`}
-              </span>
+                <span>{result.address || (result.lat && result.lon ? `${result.lat}, ${result.lon}` : result.area || 'Location')}</span>
+                <ExternalLink size={10} className="link-ext-icon" />
+              </a>
             )}
           </div>
 
@@ -696,18 +710,54 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
                   </td>
                   <td>
                     <div className="location-cell">
-                      <span className="area-pill">{rest.area || '1Borneo / Alamesra'}</span>
+                      <a
+                        href={getGoogleMapsUrl({
+                          lat: rest.lat,
+                          lon: rest.lon,
+                          address: rest.address,
+                          name: rest.name,
+                          area: rest.area,
+                        })}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="area-pill area-link"
+                        title={`Open ${rest.name} on Google Maps`}
+                      >
+                        <MapPin size={11} />
+                        <span>{rest.area || '1Borneo / Alamesra'}</span>
+                        <ExternalLink size={9} className="link-ext-icon" />
+                      </a>
+
                       {rest.lat && rest.lon ? (
-                        <span className="coords-pill" title={`GPS: ${rest.lat}, ${rest.lon}`}>
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${rest.lat},${rest.lon}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="coords-pill coords-link"
+                          title={`Pin GPS in Google Maps: ${rest.lat}, ${rest.lon}`}
+                        >
                           📍 {rest.lat.toFixed(4)}, {rest.lon.toFixed(4)}
-                        </span>
+                          <ExternalLink size={9} className="link-ext-icon" />
+                        </a>
                       ) : (
                         <span className="no-coords-pill">No GPS coordinates</span>
                       )}
+
                       {rest.address && (
-                        <span className="address-text" title={rest.address}>
-                          {rest.address}
-                        </span>
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                            rest.address.toLowerCase().includes('kinabalu')
+                              ? rest.address
+                              : `${rest.address}, Kota Kinabalu`
+                          )}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="address-text address-link"
+                          title={`Search address on Google Maps: ${rest.address}`}
+                        >
+                          <span>{rest.address}</span>
+                          <ExternalLink size={9} className="link-ext-icon" />
+                        </a>
                       )}
                     </div>
                   </td>

@@ -20,9 +20,11 @@ import {
   Star,
   MapPin,
   Clock,
+  ExternalLink,
 } from 'lucide-react';
 import { api } from '../api/client';
 import type { AnalyticsData, MenuItem, Restaurant } from '../types';
+import { getGoogleMapsUrl } from '../utils/maps';
 
 interface AnalyticsDashboardProps {
   analytics: AnalyticsData | null;
@@ -260,7 +262,24 @@ print(df[['Price', 'Rating']].describe())
                             <Star size={10} fill="currentColor" /> {r.rating}
                           </span>
                         )}
-                        {r.area && <span className="area-pill-sm">{r.area}</span>}
+                        {r.area && (
+                          <a
+                            href={getGoogleMapsUrl({
+                              lat: r.lat,
+                              lon: r.lon,
+                              address: r.address,
+                              name: r.name,
+                              area: r.area,
+                            })}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="area-pill-sm area-link"
+                            title={`Open ${r.name} in Google Maps`}
+                          >
+                            <MapPin size={9} />
+                            <span>{r.area}</span>
+                          </a>
+                        )}
                       </div>
                       <span className="rest-items-badge">{r.item_count} dishes</span>
                     </div>
@@ -604,17 +623,47 @@ print(df[['Price', 'Rating']].describe())
                     </td>
                     <td>
                       <div className="table-location-col">
-                        <span className="table-area-text">
-                          <MapPin size={11} /> {item.area || '1Borneo/Alamesra'}
-                        </span>
+                        <a
+                          href={getGoogleMapsUrl({
+                            lat: item.lat,
+                            lon: item.lon,
+                            address: item.address,
+                            name: item.restaurant_name,
+                            area: item.area,
+                          })}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="table-area-text area-link"
+                          title={`Open ${item.restaurant_name} on Google Maps`}
+                        >
+                          <MapPin size={11} />
+                          <span>{item.area || '1Borneo/Alamesra'}</span>
+                          <ExternalLink size={9} className="link-ext-icon" />
+                        </a>
                         {item.lat && item.lon ? (
-                          <span className="table-coords-text">
-                            {item.lat.toFixed(3)}, {item.lon.toFixed(3)}
-                          </span>
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lon}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="table-coords-text coords-link"
+                            title={`Google Maps Pin: ${item.lat}, ${item.lon}`}
+                          >
+                            📍 {item.lat.toFixed(3)}, {item.lon.toFixed(3)}
+                          </a>
                         ) : item.address ? (
-                          <span className="table-address-text" title={item.address}>
-                            {item.address}
-                          </span>
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                              item.address.toLowerCase().includes('kinabalu')
+                                ? item.address
+                                : `${item.address}, Kota Kinabalu`
+                            )}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="table-address-text address-link"
+                            title={`Open in Google Maps: ${item.address}`}
+                          >
+                            <span>{item.address}</span>
+                          </a>
                         ) : null}
                       </div>
                     </td>
