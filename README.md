@@ -10,7 +10,7 @@
 
 > **An end-to-end restaurant venue discovery, headless delivery & web menu extraction engine, and computational data mining laboratory.**
 
-Originally created as an academic Final Year Project (FYP) focused on local dining ecosystems (centered on 1Borneo Hypermall & Alamesra in Kota Kinabalu, Sabah, Malaysia), this platform has evolved into a general-purpose restaurant intelligence system. It handles everything from venue discovery, headless browser menu scraping, and fuzzy geospatial deduplication to hybrid SQLite/Firestore persistence, real-time analytics, and advanced data mining.
+A high-performance restaurant intelligence platform engineered to map local dining ecosystems, extract rich menu datasets from food delivery apps and official websites, and provide actionable analytics. It handles everything from automated venue discovery, headless browser menu scraping, and fuzzy geospatial deduplication to hybrid SQLite/Firestore persistence, real-time analytics, and advanced computational data mining.
 
 ---
 
@@ -38,7 +38,7 @@ Originally created as an academic Final Year Project (FYP) focused on local dini
   - [4. Launch the Development Server](#4-launch-the-development-server)
 - [CLI Scraper Usage (Standalone Execution)](#cli-scraper-usage-standalone-execution)
 - [REST API Reference](#rest-api-reference)
-- [Academic & Ethical Scraping Guidelines](#academic--ethical-scraping-guidelines)
+- [Ethical Scraping & Rate Limiting Guidelines](#ethical-scraping--rate-limiting-guidelines)
 
 ---
 
@@ -380,7 +380,7 @@ GOOGLE_APPLICATION_CREDENTIALS="./credentials/serviceAccountKey.json"
 GOOGLE_PLACES_API_KEY=""
 
 # Optional: Identify your crawler respectfully
-SCRAPER_UA="UniversityFYP-MenuScraper/0.1 (+you@siswa.ums.edu.my)"
+SCRAPER_UA="RestaurantDataScraper/1.0 (+https://github.com/your-org/scraper)"
 ```
 
 ---
@@ -458,16 +458,16 @@ The Vite API middleware (`vite-plugin-api.ts`) exposes the following endpoints:
 
 ---
 
-## Academic & Ethical Scraping Guidelines
+## Ethical Scraping & Rate Limiting Guidelines
 
-When utilizing this platform for research, academic projects, or commercial analysis, please adhere to ethical web data extraction practices:
+When utilizing this platform for market research, data analysis, or price monitoring, please adhere to responsible web data extraction practices:
 
 1. **Polite Request Throttling**: The scraper enforces a minimum delay of **2.0 seconds** per host by default (`REQUEST_DELAY_S`). Do not disable rate limiting when crawling external domains.
 2. **Robots.txt Adherence**: The engine verifies `robots.txt` directives prior to initiating scrapes on restaurant domains (`RESPECT_ROBOTS = True`).
-3. **Transparent Identification**: Set a custom `SCRAPER_UA` variable that includes your institution or contact email. Never use placeholder domains such as `example.com` (Overpass rejects these with HTTP 406).
+3. **Transparent Identification**: Set a custom `SCRAPER_UA` variable that includes your organization or contact email. Never use placeholder domains such as `example.com` (Overpass rejects these with HTTP 406).
 4. **Terms of Service Compliance**:
    - Third-party delivery platforms load dynamic content via internal JSON endpoints. The delivery extractor monitors publicly loaded browser payloads without bypassing bot detection or attacking private APIs.
-   - Respect platform Terms of Service, keep gathered datasets within fair-use academic parameters, and cite data sources appropriately in any published research.
+   - Respect platform Terms of Service, avoid overloading host infrastructure, and adhere to relevant data protection and usage policies.
 5. **No Credential Leaks**: Never commit `.env` or service account keys (`serviceAccountKey.json`) to version control.
 
 ---
