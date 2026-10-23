@@ -7,6 +7,7 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Node dependencies & build outputs
 node_modules
 dist
 dist-ssr
@@ -23,10 +24,28 @@ dist-ssr
 *.sln
 *.sw?
 
-# Python & Scraper
+# Python & Scraper virtualenvs and caches
 .venv/
 scraper/.venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
 
+# ==============================================================================
+# SECRETS, CREDENTIALS & SENSITIVE FILES (DO NOT COMMIT OR VIEW)
+# ==============================================================================
+.env
+.env.*
+!.env.example
+*.env
+*.pem
+*.key
+*.cert
+*.crt
+serviceAccountKey.json
+*serviceAccount*.json
+*firebase*.json
+firebase-credentials.json
+credentials/
+secrets/
+private/

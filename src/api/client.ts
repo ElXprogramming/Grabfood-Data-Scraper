@@ -126,4 +126,19 @@ export const api = {
   getExportUrl(format: 'csv' | 'json' = 'csv'): string {
     return `/api/export?format=${format}`;
   },
+
+  async getFirebaseStatus(): Promise<{ success: boolean; configured: boolean; projectId?: string }> {
+    const res = await fetch('/api/firebase/status');
+    if (!res.ok) return { success: false, configured: false };
+    return res.json();
+  },
+
+  async syncFirebase(): Promise<{ success: boolean; restaurants_synced?: number; items_synced?: number; error?: string }> {
+    const res = await fetch('/api/firebase/sync', { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || 'Failed to sync to Firebase');
+    }
+    return res.json();
+  },
 };

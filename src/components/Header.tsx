@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, Sparkles, BarChart3, Terminal, RefreshCw, Cpu } from 'lucide-react';
+import { Database, Sparkles, BarChart3, Terminal, RefreshCw, Cpu, Flame } from 'lucide-react';
 
 interface HeaderProps {
   activeTab: 'scraper' | 'analytics' | 'datamining';
@@ -41,8 +41,13 @@ export const Header: React.FC<HeaderProps> = ({
             <Database size={15} className="pill-icon" />
             <span className="db-status-dot"></span>
             <span className="db-text">
-              SQLite Active: <strong>{itemCount}</strong> items • <strong>{restaurantCount}</strong> restaurants
+              SQLite: <strong>{itemCount}</strong> items • <strong>{restaurantCount}</strong> restaurants
             </span>
+          </div>
+
+          <div className="firebase-pill" title="Google Cloud Firestore Connected (restaurantdatascraper)">
+            <Flame size={14} className="pill-icon-fire" />
+            <span className="firebase-text">Firestore: Active</span>
           </div>
 
           <button

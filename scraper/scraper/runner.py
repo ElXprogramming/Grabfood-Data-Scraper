@@ -183,6 +183,15 @@ def cmd_scrape(
         except Exception:
             pass
 
+        # Automatic Firestore Cloud Sync
+        try:
+            from .firebase_db import sync_restaurant_to_firestore, sync_menu_items_to_firestore
+            doc_id = sync_restaurant_to_firestore(restaurant_record, restaurant_id=rid)
+            if doc_id and sanitized_items:
+                sync_menu_items_to_firestore(doc_id, final_name, sanitized_items, source=source_label)
+        except Exception:
+            pass
+
     return {
         "success": True,
         "restaurantId": rid,
@@ -329,6 +338,7 @@ def main():
     parser.add_argument("--get-discovered-items", action="store_true", help="Get menu items for a discovered restaurant")
     parser.add_argument("--restaurant-id", type=int, help="Restaurant ID for --get-discovered-items")
     parser.add_argument("--sync-all-discovered", action="store_true", help="Export all pre-scraped restaurant menus")
+    parser.add_argument("--sync-firebase", action="store_true", help="Sync all SQLite data to Firebase Cloud Firestore")
 
     args = parser.parse_args()
 
@@ -341,6 +351,9 @@ def main():
             res = cmd_get_discovered_items(args.restaurant_id)
     elif args.sync_all_discovered:
         res = cmd_sync_all_discovered()
+    elif args.sync_firebase:
+        from .firebase_db import sync_sqlite_to_firestore
+        res = sync_sqlite_to_firestore(config.DB_PATH)
     elif args.url:
         res = cmd_scrape(
             args.url,

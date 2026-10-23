@@ -601,6 +601,44 @@ export function apiPlugin(): Plugin {
             return;
           }
 
+          if (pathname === '/api/firebase/status' && req.method === 'GET') {
+            const keyCandidates = [
+              path.resolve(rootDir, 'credentials/serviceAccountKey.json'),
+              path.resolve(rootDir, 'serviceAccountKey.json'),
+            ];
+            const hasKey = keyCandidates.some((p) => fs.existsSync(p)) || Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+            sendJson(res, 200, {
+              success: true,
+              configured: hasKey,
+              projectId: 'restaurantdatascraper',
+            });
+            return;
+          }
+
+          if (pathname === '/api/firebase/sync' && req.method === 'POST') {
+            const child = spawn(pythonPath, ['-m', 'scraper.runner', '--sync-firebase'], {
+              cwd: scraperDir,
+              env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONPATH: 'scraper' },
+            });
+            let stdout = '';
+            let stderr = '';
+            child.stdout.on('data', (d) => { stdout += d.toString(); });
+            child.stderr.on('data', (d) => { stderr += d.toString(); });
+            child.on('close', (code) => {
+              try {
+                const match = stdout.match(/\{[\s\S]*\}/);
+                if (match) {
+                  sendJson(res, 200, JSON.parse(match[0]));
+                } else {
+                  sendJson(res, 200, { success: code === 0, rawStdout: stdout, rawStderr: stderr });
+                }
+              } catch {
+                sendJson(res, 500, { success: false, error: stderr || stdout });
+              }
+            });
+            return;
+          }
+
           sendJson(res, 404, { success: false, error: 'API route not found' });
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : 'Internal API Error';
