@@ -7,6 +7,10 @@ export interface Restaurant {
   foodpanda_url: string | null;
   cuisine: string | null;
   rating: number | null;
+  opening_hours: string | null;
+  address: string | null;
+  lat: number | null;
+  lon: number | null;
   item_count: number;
   avg_price: number | null;
   min_price: number | null;
@@ -26,6 +30,11 @@ export interface MenuItem {
   scraped_at: string;
   area: string | null;
   cuisine: string | null;
+  rating: number | null;
+  opening_hours: string | null;
+  address: string | null;
+  lat: number | null;
+  lon: number | null;
 }
 
 export interface AnalyticsKPI {
@@ -63,6 +72,12 @@ export interface RestaurantStat {
   id: number;
   name: string;
   area: string | null;
+  cuisine: string | null;
+  rating: number | null;
+  opening_hours: string | null;
+  address: string | null;
+  lat: number | null;
+  lon: number | null;
   item_count: number;
   avg_price: number;
   min_price: number;
@@ -94,7 +109,16 @@ export interface AnalyticsData {
 
 export interface ScrapeResult {
   success: boolean;
+  restaurantId?: number;
+  isMerged?: boolean;
   restaurantName?: string;
+  rating?: number | null;
+  cuisine?: string | null;
+  openingHours?: string | null;
+  address?: string | null;
+  lat?: number | null;
+  lon?: number | null;
+  area?: string | null;
   source?: string;
   url?: string;
   itemsCount?: number;

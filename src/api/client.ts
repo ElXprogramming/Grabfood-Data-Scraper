@@ -4,12 +4,39 @@ export interface GetItemsParams {
   restaurantId?: number | null;
   search?: string;
   category?: string;
+  cuisine?: string;
+  minRating?: number;
   area?: string;
   minPrice?: number;
   maxPrice?: number;
-  sort?: 'price_asc' | 'price_desc' | 'name_asc' | 'name_desc' | 'newest';
+  sort?: 'price_asc' | 'price_desc' | 'name_asc' | 'name_desc' | 'rating_desc' | 'newest';
   limit?: number;
   offset?: number;
+}
+
+export interface ScrapeOptions {
+  url: string;
+  name?: string;
+  rating?: number;
+  cuisine?: string;
+  opening_hours?: string;
+  address?: string;
+  lat?: number;
+  lon?: number;
+  area?: string;
+  render?: boolean;
+}
+
+export interface UpdateRestaurantParams {
+  id: number;
+  name?: string;
+  rating?: number;
+  cuisine?: string;
+  opening_hours?: string;
+  address?: string;
+  lat?: number;
+  lon?: number;
+  area?: string;
 }
 
 export interface GetItemsResponse {
@@ -33,6 +60,8 @@ export const api = {
     if (params.restaurantId) query.set('restaurant_id', String(params.restaurantId));
     if (params.search) query.set('search', params.search);
     if (params.category) query.set('category', params.category);
+    if (params.cuisine) query.set('cuisine', params.cuisine);
+    if (params.minRating != null) query.set('min_rating', String(params.minRating));
     if (params.area) query.set('area', params.area);
     if (params.minPrice != null) query.set('min_price', String(params.minPrice));
     if (params.maxPrice != null) query.set('max_price', String(params.maxPrice));
@@ -51,11 +80,11 @@ export const api = {
     return res.json();
   },
 
-  async scrapeUrl(url: string, name?: string, render: boolean = false): Promise<ScrapeResult> {
+  async scrapeUrl(options: ScrapeOptions): Promise<ScrapeResult> {
     const res = await fetch('/api/scrape', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, name, render }),
+      body: JSON.stringify(options),
     });
     if (!res.ok) {
       const errData = await res.json().catch(() => ({ error: res.statusText }));
@@ -64,11 +93,28 @@ export const api = {
     return res.json();
   },
 
-  async addLink(name: string, url: string): Promise<{ success: boolean; message: string }> {
+  async updateRestaurant(params: UpdateRestaurantParams): Promise<{ success: boolean; message: string }> {
+    const res = await fetch('/api/update-restaurant', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || 'Failed to update restaurant parameters');
+    }
+    return res.json();
+  },
+
+  async addLink(
+    name: string,
+    url: string,
+    extra: Partial<UpdateRestaurantParams> = {}
+  ): Promise<{ success: boolean; isMerged?: boolean; message: string }> {
     const res = await fetch('/api/add-link', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, url }),
+      body: JSON.stringify({ name, url, ...extra }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText }));

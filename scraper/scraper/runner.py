@@ -48,29 +48,51 @@ def _guess_restaurant_name(url: str) -> str:
 
 
 def _is_delivery_url(url: str) -> bool:
-    low = url.lower()
-    return "food.grab.com" in low or "grab.com" in low or "foodpanda" in low
+    """Return True if URL is a recognized delivery platform (GrabFood, Foodpanda, ShopeeFood, etc.)."""
+    u = url.lower()
+    return any(p in u for p in ("grab.com", "foodpanda.", "shopeefood."))
 
 
-def cmd_scrape(url: str, name: str | None = None, render: bool = False, save_sqlite: bool = True) -> dict:
+def _infer_area(url: str = "", address: str = "", name: str = "") -> str | None:
+    comb = f"{url} {address} {name}".lower()
+    if "alamesra" in comb:
+        return "alamesra"
+    if "1borneo" in comb or "borneo" in comb:
+        return "1borneo"
+    return None
+
+
+def cmd_scrape(
+    url: str,
+    name: str | None = None,
+    rating: float | None = None,
+    cuisine: str | None = None,
+    opening_hours: str | None = None,
+    address: str | None = None,
+    lat: float | None = None,
+    lon: float | None = None,
+    area: str | None = None,
+    render: bool = False,
+    save_sqlite: bool = True,
+) -> dict:
     url = url.strip()
-    name = (name or "").strip() or _guess_restaurant_name(url)
     is_delivery = _is_delivery_url(url)
 
     source_label = "website"
     items = []
     assets = []
     socials = {}
+    extracted_meta = {}
 
     if is_delivery:
         source_label = "grabfood" if "grab.com" in url.lower() else "foodpanda"
         try:
-            items = scrape_delivery(url)
+            items, extracted_meta = scrape_delivery(url, return_meta=True)
         except Exception as e:
             return {
                 "success": False,
                 "error": f"Delivery scraper failed: {str(e)}",
-                "restaurantName": name,
+                "restaurantName": name or _guess_restaurant_name(url),
                 "url": url,
                 "source": source_label,
             }
@@ -78,14 +100,29 @@ def cmd_scrape(url: str, name: str | None = None, render: bool = False, save_sql
         try:
             client = PoliteClient()
             items, source_label, assets, socials = scrape_website(client, url, render=render)
+            extracted_meta = {
+                k: socials.get(k)
+                for k in ("rating", "cuisine", "opening_hours", "address", "lat", "lon", "phone")
+                if socials.get(k) is not None
+            }
         except Exception as e:
             return {
                 "success": False,
                 "error": f"Website scraper failed: {str(e)}",
-                "restaurantName": name,
+                "restaurantName": name or _guess_restaurant_name(url),
                 "url": url,
                 "source": source_label,
             }
+
+    # Merge user-supplied parameters with extracted parameters
+    final_name = (name or "").strip() or extracted_meta.get("name") or _guess_restaurant_name(url)
+    final_rating = rating if rating is not None else extracted_meta.get("rating")
+    final_cuisine = (cuisine or "").strip() or extracted_meta.get("cuisine")
+    final_hours = (opening_hours or "").strip() or extracted_meta.get("opening_hours")
+    final_address = (address or "").strip() or extracted_meta.get("address")
+    final_lat = lat if lat is not None else extracted_meta.get("lat")
+    final_lon = lon if lon is not None else extracted_meta.get("lon")
+    final_area = (area or "").strip() or extracted_meta.get("area") or _infer_area(url, final_address or "", final_name)
 
     # Normalize items
     sanitized_items = []
@@ -107,14 +144,35 @@ def cmd_scrape(url: str, name: str | None = None, render: bool = False, save_sql
             "currency": item.get("currency", "MYR"),
         })
 
-    # Optional SQLite caching
+    rid = None
+    is_merged = False
+
+    # Optional SQLite caching with comprehensive deduplication
     if save_sqlite:
         try:
             conn = db.connect(config.DB_PATH)
             col = "grab_url" if "grab.com" in url.lower() else "foodpanda_url" if "foodpanda" in url.lower() else "website"
-            rid = db.upsert_restaurant(conn, {"name": name, col: url})
+            
+            restaurant_record = {
+                "name": final_name,
+                col: url,
+                "rating": final_rating,
+                "cuisine": final_cuisine,
+                "opening_hours": final_hours,
+                "address": final_address,
+                "lat": final_lat,
+                "lon": final_lon,
+                "area": final_area,
+            }
+            
+            # Check if this restaurant already existed to report deduplication status
+            existing_match = db._find_match(conn, restaurant_record)
+            is_merged = existing_match is not None
+
+            rid = db.upsert_restaurant(conn, restaurant_record)
+
             if socials:
-                db.set_fields(conn, rid, **{k: v for k, v in socials.items()})
+                db.set_fields(conn, rid, **{k: v for k, v in socials.items() if k in db.RESTAURANT_FIELDS})
             for a_url, a_kind in assets:
                 db.add_asset(conn, rid, a_url, a_kind)
             if sanitized_items:
@@ -127,7 +185,16 @@ def cmd_scrape(url: str, name: str | None = None, render: bool = False, save_sql
 
     return {
         "success": True,
-        "restaurantName": name,
+        "restaurantId": rid,
+        "isMerged": is_merged,
+        "restaurantName": final_name,
+        "rating": final_rating,
+        "cuisine": final_cuisine,
+        "openingHours": final_hours,
+        "address": final_address,
+        "lat": final_lat,
+        "lon": final_lon,
+        "area": final_area,
         "source": source_label,
         "url": url,
         "itemsCount": len(sanitized_items),
@@ -141,7 +208,8 @@ def cmd_list_discovered() -> dict:
     conn = db.connect(config.DB_PATH)
     rows = conn.execute("""
         SELECT r.id, r.name, r.area, r.website, r.grab_url, r.foodpanda_url,
-               r.cuisine, r.rating, COUNT(m.id) as item_count
+               r.cuisine, r.rating, r.opening_hours, r.address, r.lat, r.lon,
+               COUNT(m.id) as item_count
         FROM restaurants r
         LEFT JOIN menu_items m ON r.id = m.restaurant_id
         GROUP BY r.id
@@ -158,6 +226,10 @@ def cmd_list_discovered() -> dict:
             "foodpanda_url": r["foodpanda_url"],
             "cuisine": r["cuisine"],
             "rating": r["rating"],
+            "openingHours": r["opening_hours"],
+            "address": r["address"],
+            "lat": r["lat"],
+            "lon": r["lon"],
             "itemCount": r["item_count"],
             "hasScrapedData": r["item_count"] > 0,
         }
@@ -245,6 +317,13 @@ def main():
     parser = argparse.ArgumentParser(description="Menu Scraper CLI Runner")
     parser.add_argument("--url", help="URL to scrape")
     parser.add_argument("--name", help="Restaurant name")
+    parser.add_argument("--rating", type=float, help="Restaurant rating (e.g. 4.5)")
+    parser.add_argument("--cuisine", help="Cuisine tags (e.g. Fast Food, Sandwich)")
+    parser.add_argument("--opening-hours", help="Operating hours (e.g. 08:00 - 22:00)")
+    parser.add_argument("--address", help="Restaurant physical street address")
+    parser.add_argument("--lat", type=float, help="Latitude")
+    parser.add_argument("--lon", type=float, help="Longitude")
+    parser.add_argument("--area", help="District or neighborhood (e.g. 1borneo, alamesra)")
     parser.add_argument("--render", action="store_true", help="Use headless Chromium for website")
     parser.add_argument("--list-discovered", action="store_true", help="List discovered restaurants from SQLite DB")
     parser.add_argument("--get-discovered-items", action="store_true", help="Get menu items for a discovered restaurant")
@@ -263,7 +342,18 @@ def main():
     elif args.sync_all_discovered:
         res = cmd_sync_all_discovered()
     elif args.url:
-        res = cmd_scrape(args.url, args.name, render=args.render)
+        res = cmd_scrape(
+            args.url,
+            name=args.name,
+            rating=args.rating,
+            cuisine=args.cuisine,
+            opening_hours=args.opening_hours,
+            address=args.address,
+            lat=args.lat,
+            lon=args.lon,
+            area=args.area,
+            render=args.render,
+        )
     else:
         res = {"success": False, "error": "No valid action specified. Use --url, --list-discovered, or --sync-all-discovered."}
 

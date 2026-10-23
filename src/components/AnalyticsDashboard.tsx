@@ -17,6 +17,9 @@ import {
   Check,
   TrendingUp,
   Tag,
+  Star,
+  MapPin,
+  Clock,
 } from 'lucide-react';
 import { api } from '../api/client';
 import type { AnalyticsData, MenuItem, Restaurant } from '../types';
@@ -37,10 +40,12 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
     initialRestaurantFilter ? String(initialRestaurantFilter) : ''
   );
   const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedCuisine, setSelectedCuisine] = useState<string>('');
+  const [minRating, setMinRating] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [minPrice, setMinPrice] = useState<string>('');
   const [maxPrice, setMaxPrice] = useState<string>('');
-  const [sortBy, setSortBy] = useState<'price_asc' | 'price_desc' | 'name_asc' | 'name_desc'>('price_desc');
+  const [sortBy, setSortBy] = useState<'price_asc' | 'price_desc' | 'name_asc' | 'name_desc' | 'rating_desc'>('price_desc');
   const [page, setPage] = useState<number>(0);
   const pageSize = 25;
 
@@ -65,6 +70,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           restaurantId: selectedRestaurant ? parseInt(selectedRestaurant, 10) : undefined,
           search: searchQuery.trim() || undefined,
           category: selectedCategory || undefined,
+          cuisine: selectedCuisine || undefined,
+          minRating: minRating ? parseFloat(minRating) : undefined,
           minPrice: minPrice ? parseFloat(minPrice) : undefined,
           maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
           sort: sortBy,
@@ -87,13 +94,26 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
       isCancelled = true;
       clearTimeout(debounceTimer);
     };
-  }, [selectedRestaurant, selectedCategory, searchQuery, minPrice, maxPrice, sortBy, page]);
+  }, [selectedRestaurant, selectedCategory, selectedCuisine, minRating, searchQuery, minPrice, maxPrice, sortBy, page]);
 
-  // Extract unique categories from analytics
+  // Extract unique categories and cuisines
   const availableCategories = useMemo(() => {
     if (!analytics || !analytics.categories) return [];
     return analytics.categories.map((c) => c.category);
   }, [analytics]);
+
+  const availableCuisines = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of restaurants) {
+      if (r.cuisine) {
+        r.cuisine.split(',').forEach((c) => {
+          const trimmed = c.trim();
+          if (trimmed) set.add(trimmed);
+        });
+      }
+    }
+    return Array.from(set).sort();
+  }, [restaurants]);
 
   const kpi = analytics?.kpi;
   const totalPages = Math.ceil(totalCount / pageSize);
@@ -108,8 +128,8 @@ df = pd.read_csv(url)
 
 print("Dataset Summary:")
 print(df.info())
-print("\\nPrice Distribution Summary:")
-print(df['Price'].describe())
+print("\\nPrice & Rating Statistics:")
+print(df[['Price', 'Rating']].describe())
 `;
     navigator.clipboard.writeText(pythonCode);
     setCopied(true);
@@ -148,7 +168,7 @@ print(df['Price'].describe())
               <TrendingUp size={20} />
             </div>
             <div className="kpi-data">
-              <span className="kpi-label">Median & Spread (IQR)</span>
+              <span className="kpi-label">Median &amp; Spread (IQR)</span>
               <strong className="kpi-value">RM {kpi.medianPrice.toFixed(2)}</strong>
               <span className="kpi-sub">
                 IQR: RM {kpi.iqr.toFixed(2)} (Q1: RM {kpi.q1.toFixed(2)} - Q3: RM {kpi.q3.toFixed(2)})
@@ -165,7 +185,7 @@ print(df['Price'].describe())
               <strong className="kpi-value">
                 {kpi.scrapedRestaurants} / {kpi.totalRestaurants}
               </strong>
-              <span className="kpi-sub">1Borneo & Alamesra corridor</span>
+              <span className="kpi-sub">1Borneo &amp; Alamesra corridor</span>
             </div>
           </div>
         </div>
@@ -217,7 +237,7 @@ print(df['Price'].describe())
               <div className="chart-title-group">
                 <Store size={18} />
                 <div>
-                  <h4>Restaurant Price Spread Comparison</h4>
+                  <h4>Restaurant Price Spread &amp; Parameters</h4>
                   <p>Min, Average, and Max menu price benchmarks per brand</p>
                 </div>
               </div>
@@ -233,7 +253,15 @@ print(df['Price'].describe())
                 return (
                   <div key={r.id} className="rest-benchmark-row">
                     <div className="rest-meta">
-                      <strong className="rest-name">{r.name}</strong>
+                      <div className="rest-meta-left">
+                        <strong className="rest-name">{r.name}</strong>
+                        {r.rating && (
+                          <span className="rating-pill-sm">
+                            <Star size={10} fill="currentColor" /> {r.rating}
+                          </span>
+                        )}
+                        {r.area && <span className="area-pill-sm">{r.area}</span>}
+                      </div>
                       <span className="rest-items-badge">{r.item_count} dishes</span>
                     </div>
 
@@ -274,7 +302,7 @@ print(df['Price'].describe())
               <div className="chart-title-group">
                 <Layers size={18} />
                 <div>
-                  <h4>Menu Category Volume & Price Profile</h4>
+                  <h4>Menu Category Volume &amp; Price Profile</h4>
                   <p>Dish diversity and average meal cost across major category classifications</p>
                 </div>
               </div>
@@ -322,7 +350,7 @@ print(df['Price'].describe())
               href={api.getExportUrl('csv')}
               download="restaurant_menus_1borneo.csv"
               className="btn-export csv"
-              title="Download entire dataset as CSV"
+              title="Download entire dataset as CSV with ratings and locations"
             >
               <FileSpreadsheet size={15} />
               <span>Export CSV</span>
@@ -355,7 +383,7 @@ print(df['Price'].describe())
             <Search size={16} className="search-icon" />
             <input
               type="text"
-              placeholder="Search dishes, ingredients, keywords..."
+              placeholder="Search dishes, restaurants, cuisine tags..."
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
@@ -395,6 +423,39 @@ print(df['Price'].describe())
                     {r.name} ({r.item_count})
                   </option>
                 ))}
+            </select>
+
+            {/* Cuisine Filter */}
+            {availableCuisines.length > 0 && (
+              <select
+                value={selectedCuisine}
+                onChange={(e) => {
+                  setSelectedCuisine(e.target.value);
+                  setPage(0);
+                }}
+                className="filter-select"
+              >
+                <option value="">All Cuisines</option>
+                {availableCuisines.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {/* Rating Filter */}
+            <select
+              value={minRating}
+              onChange={(e) => {
+                setMinRating(e.target.value);
+                setPage(0);
+              }}
+              className="filter-select"
+            >
+              <option value="">Any Rating</option>
+              <option value="4.0">⭐ 4.0 &amp; Above</option>
+              <option value="4.5">⭐ 4.5 &amp; Above</option>
             </select>
 
             {/* Category Filter */}
@@ -446,13 +507,14 @@ print(df['Price'].describe())
               <select
                 value={sortBy}
                 onChange={(e) => {
-                  setSortBy(e.target.value as 'price_asc' | 'price_desc' | 'name_asc' | 'name_desc');
+                  setSortBy(e.target.value as 'price_asc' | 'price_desc' | 'name_asc' | 'name_desc' | 'rating_desc');
                   setPage(0);
                 }}
                 className="filter-select sort"
               >
                 <option value="price_desc">Price: High to Low</option>
                 <option value="price_asc">Price: Low to High</option>
+                <option value="rating_desc">Rating: High to Low</option>
                 <option value="name_asc">Name: A to Z</option>
                 <option value="name_desc">Name: Z to A</option>
               </select>
@@ -466,17 +528,18 @@ print(df['Price'].describe())
             <thead>
               <tr>
                 <th>Dish / Menu Item</th>
-                <th>Restaurant</th>
+                <th>Restaurant &amp; Rating</th>
+                <th>Cuisine &amp; Hours</th>
+                <th>Location / Coordinates</th>
                 <th>Category</th>
                 <th className="th-price">Price (MYR)</th>
                 <th>Platform</th>
-                <th>Date Scraped</th>
               </tr>
             </thead>
             <tbody>
               {isLoadingItems ? (
                 <tr>
-                  <td colSpan={6} className="table-loading-cell">
+                  <td colSpan={7} className="table-loading-cell">
                     <div className="loading-spinner-row">
                       <Sparkles size={18} className="spin-icon" />
                       <span>Loading records from SQLite...</span>
@@ -485,13 +548,15 @@ print(df['Price'].describe())
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="table-empty-cell">
+                  <td colSpan={7} className="table-empty-cell">
                     <p>No dishes matched your filter criteria.</p>
                     <button
                       className="btn-reset-filters"
                       onClick={() => {
                         setSelectedRestaurant('');
                         setSelectedCategory('');
+                        setSelectedCuisine('');
+                        setMinRating('');
                         setSearchQuery('');
                         setMinPrice('');
                         setMaxPrice('');
@@ -516,7 +581,42 @@ print(df['Price'].describe())
                       </div>
                     </td>
                     <td>
-                      <span className="restaurant-tag">{item.restaurant_name}</span>
+                      <div className="table-rest-col">
+                        <span className="restaurant-tag">{item.restaurant_name}</span>
+                        {item.rating ? (
+                          <span className="table-rating-pill">
+                            <Star size={11} fill="currentColor" /> {item.rating}
+                          </span>
+                        ) : (
+                          <span className="table-no-rating">Unrated</span>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <div className="table-cuisine-col">
+                        <span className="table-cuisine-text">{item.cuisine || 'General'}</span>
+                        {item.opening_hours && (
+                          <span className="table-hours-text" title={item.opening_hours}>
+                            <Clock size={10} /> {item.opening_hours}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <div className="table-location-col">
+                        <span className="table-area-text">
+                          <MapPin size={11} /> {item.area || '1Borneo/Alamesra'}
+                        </span>
+                        {item.lat && item.lon ? (
+                          <span className="table-coords-text">
+                            {item.lat.toFixed(3)}, {item.lon.toFixed(3)}
+                          </span>
+                        ) : item.address ? (
+                          <span className="table-address-text" title={item.address}>
+                            {item.address}
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     <td>
                       <span className="category-pill">
@@ -531,12 +631,7 @@ print(df['Price'].describe())
                     </td>
                     <td>
                       <span className={`source-badge ${item.source === 'grabfood' ? 'grab' : 'web'}`}>
-                        {item.source === 'grabfood' ? '🛵 GrabFood' : '🌐 Website'}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="date-cell">
-                        {item.scraped_at ? item.scraped_at.split('T')[0] : 'Recent'}
+                        {item.source === 'grabfood' ? '🛵 Grab' : '🌐 Web'}
                       </span>
                     </td>
                   </tr>

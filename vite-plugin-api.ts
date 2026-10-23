@@ -8,12 +8,37 @@ import fs from 'node:fs';
 interface ScrapeRequest {
   url: string;
   name?: string;
+  rating?: number;
+  cuisine?: string;
+  opening_hours?: string;
+  address?: string;
+  lat?: number;
+  lon?: number;
+  area?: string;
   render?: boolean;
 }
 
 interface AddLinkRequest {
   name: string;
   url: string;
+  address?: string;
+  lat?: number;
+  lon?: number;
+  rating?: number;
+  cuisine?: string;
+  opening_hours?: string;
+}
+
+interface UpdateRestaurantRequest {
+  id: number;
+  name?: string;
+  rating?: number;
+  cuisine?: string;
+  opening_hours?: string;
+  address?: string;
+  lat?: number;
+  lon?: number;
+  area?: string;
 }
 
 export function apiPlugin(): Plugin {
@@ -80,7 +105,8 @@ export function apiPlugin(): Plugin {
           if (pathname === '/api/restaurants' && req.method === 'GET') {
             const db = getDb();
             const rows = db.prepare(`
-              SELECT r.id, r.name, r.area, r.website, r.grab_url, r.foodpanda_url, r.cuisine, r.rating,
+              SELECT r.id, r.name, r.area, r.website, r.grab_url, r.foodpanda_url,
+                     r.cuisine, r.rating, r.opening_hours, r.address, r.lat, r.lon,
                      COUNT(m.id) as item_count,
                      ROUND(AVG(m.price), 2) as avg_price,
                      ROUND(MIN(m.price), 2) as min_price,
@@ -100,6 +126,8 @@ export function apiPlugin(): Plugin {
             const restaurantId = urlObj.searchParams.get('restaurant_id');
             const search = urlObj.searchParams.get('search');
             const category = urlObj.searchParams.get('category');
+            const cuisine = urlObj.searchParams.get('cuisine');
+            const minRating = urlObj.searchParams.get('min_rating');
             const area = urlObj.searchParams.get('area');
             const minPrice = urlObj.searchParams.get('min_price');
             const maxPrice = urlObj.searchParams.get('max_price');
@@ -115,13 +143,21 @@ export function apiPlugin(): Plugin {
               params.push(parseInt(restaurantId, 10));
             }
             if (search) {
-              conditions.push('(m.name LIKE ? OR m.description LIKE ? OR r.name LIKE ?)');
+              conditions.push('(m.name LIKE ? OR m.description LIKE ? OR r.name LIKE ? OR r.cuisine LIKE ?)');
               const term = `%${search}%`;
-              params.push(term, term, term);
+              params.push(term, term, term, term);
             }
             if (category) {
               conditions.push('m.category = ?');
               params.push(category);
+            }
+            if (cuisine) {
+              conditions.push('r.cuisine LIKE ?');
+              params.push(`%${cuisine}%`);
+            }
+            if (minRating) {
+              conditions.push('r.rating >= ?');
+              params.push(parseFloat(minRating));
             }
             if (area) {
               conditions.push('r.area = ?');
@@ -141,6 +177,7 @@ export function apiPlugin(): Plugin {
             if (sort === 'price_desc') orderBy = 'm.price DESC';
             if (sort === 'name_asc') orderBy = 'm.name ASC';
             if (sort === 'name_desc') orderBy = 'm.name DESC';
+            if (sort === 'rating_desc') orderBy = 'r.rating DESC, m.price DESC';
             if (sort === 'newest') orderBy = 'm.id DESC';
 
             const whereClause = conditions.join(' AND ');
@@ -154,7 +191,7 @@ export function apiPlugin(): Plugin {
 
             const items = db.prepare(`
               SELECT m.id, m.restaurant_id, m.category, m.name, m.description, m.price, m.currency, m.source, m.scraped_at,
-                     r.name as restaurant_name, r.area, r.cuisine
+                     r.name as restaurant_name, r.area, r.cuisine, r.rating, r.opening_hours, r.address, r.lat, r.lon
               FROM menu_items m
               JOIN restaurants r ON m.restaurant_id = r.id
               WHERE ${whereClause}
@@ -251,7 +288,8 @@ export function apiPlugin(): Plugin {
 
             // Restaurant comparison
             const restaurantBreakdown = db.prepare(`
-              SELECT r.id, r.name, r.area, COUNT(m.id) as item_count,
+              SELECT r.id, r.name, r.area, r.cuisine, r.rating, r.opening_hours, r.address, r.lat, r.lon,
+                     COUNT(m.id) as item_count,
                      ROUND(AVG(m.price), 2) as avg_price,
                      ROUND(MIN(m.price), 2) as min_price,
                      ROUND(MAX(m.price), 2) as max_price
@@ -330,6 +368,27 @@ export function apiPlugin(): Plugin {
             if (body.name && body.name.trim()) {
               args.push('--name', body.name.trim());
             }
+            if (body.rating != null) {
+              args.push('--rating', String(body.rating));
+            }
+            if (body.cuisine && body.cuisine.trim()) {
+              args.push('--cuisine', body.cuisine.trim());
+            }
+            if (body.opening_hours && body.opening_hours.trim()) {
+              args.push('--opening-hours', body.opening_hours.trim());
+            }
+            if (body.address && body.address.trim()) {
+              args.push('--address', body.address.trim());
+            }
+            if (body.lat != null) {
+              args.push('--lat', String(body.lat));
+            }
+            if (body.lon != null) {
+              args.push('--lon', String(body.lon));
+            }
+            if (body.area && body.area.trim()) {
+              args.push('--area', body.area.trim());
+            }
             if (body.render) {
               args.push('--render');
             }
@@ -363,7 +422,6 @@ export function apiPlugin(): Plugin {
               }
 
               try {
-                // Find JSON output in stdout (may contain some preceding log text)
                 const jsonMatch = stdout.match(/\{[\s\S]*\}/);
                 if (jsonMatch) {
                   const result = JSON.parse(jsonMatch[0]);
@@ -390,9 +448,36 @@ export function apiPlugin(): Plugin {
             return;
           }
 
+          if (pathname === '/api/update-restaurant' && req.method === 'POST') {
+            const body = await readBody<UpdateRestaurantRequest>(req);
+            if (!body.id) {
+              sendJson(res, 400, { success: false, error: 'Restaurant ID is required.' });
+              return;
+            }
+
+            const db = getDb();
+            const updates: string[] = ["updated_at = datetime('now')"];
+            const values: (string | number)[] = [];
+
+            if (body.name != null) { updates.push('name = ?'); values.push(body.name); }
+            if (body.rating != null) { updates.push('rating = ?'); values.push(body.rating); }
+            if (body.cuisine != null) { updates.push('cuisine = ?'); values.push(body.cuisine); }
+            if (body.opening_hours != null) { updates.push('opening_hours = ?'); values.push(body.opening_hours); }
+            if (body.address != null) { updates.push('address = ?'); values.push(body.address); }
+            if (body.lat != null) { updates.push('lat = ?'); values.push(body.lat); }
+            if (body.lon != null) { updates.push('lon = ?'); values.push(body.lon); }
+            if (body.area != null) { updates.push('area = ?'); values.push(body.area); }
+
+            values.push(body.id);
+            db.prepare(`UPDATE restaurants SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+
+            sendJson(res, 200, { success: true, message: `Updated restaurant #${body.id} parameters successfully.` });
+            return;
+          }
+
           if (pathname === '/api/add-link' && req.method === 'POST') {
             const body = await readBody<AddLinkRequest>(req);
-            const { name, url } = body;
+            const { name, url, address, lat, lon, rating, cuisine, opening_hours } = body;
             if (!name || !url) {
               sendJson(res, 400, { success: false, error: 'Both name and url are required.' });
               return;
@@ -405,7 +490,11 @@ export function apiPlugin(): Plugin {
               ? 'foodpanda_url'
               : 'website';
 
-            const rows = db.prepare('SELECT id, name FROM restaurants WHERE name LIKE ?').all(`%${name}%`) as Array<{ id: number; name: string }>;
+            const cleanUrl = url.split('?')[0].toLowerCase();
+            const rows = db.prepare(`
+              SELECT id, name FROM restaurants
+              WHERE ${col} LIKE ? OR name LIKE ?
+            `).all(`%${cleanUrl}%`, `%${name}%`) as Array<{ id: number; name: string }>;
 
             if (rows.length === 0) {
               const area = name.toLowerCase().includes('alamesra')
@@ -414,19 +503,28 @@ export function apiPlugin(): Plugin {
                 ? '1borneo'
                 : null;
               db.prepare(`
-                INSERT INTO restaurants (name, ${col}, area, created_at, updated_at)
-                VALUES (?, ?, ?, datetime('now'), datetime('now'))
-              `).run(name, url, area);
-              sendJson(res, 200, { success: true, message: `Created new restaurant '${name}' with ${col}.` });
+                INSERT INTO restaurants (name, ${col}, address, lat, lon, rating, cuisine, opening_hours, area, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+              `).run(name, url, address || null, lat || null, lon || null, rating || null, cuisine || null, opening_hours || null, area);
+              sendJson(res, 200, { success: true, isMerged: false, message: `Created new restaurant '${name}' with ${col}.` });
             } else {
+              const existingId = rows[0].id;
               db.prepare(`
                 UPDATE restaurants
-                SET ${col} = ?, updated_at = datetime('now')
+                SET ${col} = ?,
+                    address = COALESCE(?, address),
+                    lat = COALESCE(?, lat),
+                    lon = COALESCE(?, lon),
+                    rating = COALESCE(?, rating),
+                    cuisine = COALESCE(?, cuisine),
+                    opening_hours = COALESCE(?, opening_hours),
+                    updated_at = datetime('now')
                 WHERE id = ?
-              `).run(url, rows[0].id);
+              `).run(url, address || null, lat || null, lon || null, rating || null, cuisine || null, opening_hours || null, existingId);
               sendJson(res, 200, {
                 success: true,
-                message: `Updated ${col} for existing restaurant '${rows[0].name}'.`,
+                isMerged: true,
+                message: `Deduplicated: Attached link and parameters to existing restaurant '${rows[0].name}' (ID #${existingId}).`,
               });
             }
             return;
@@ -437,7 +535,8 @@ export function apiPlugin(): Plugin {
             const format = urlObj.searchParams.get('format') || 'csv';
 
             const items = db.prepare(`
-              SELECT r.name as restaurant, r.area, r.cuisine, m.category, m.name as item_name,
+              SELECT r.name as restaurant, r.area, r.cuisine, r.rating, r.opening_hours,
+                     r.address, r.lat, r.lon, m.category, m.name as item_name,
                      m.description, m.price, m.currency, m.source, m.source_url, m.scraped_at
               FROM menu_items m
               JOIN restaurants r ON m.restaurant_id = r.id
@@ -457,6 +556,11 @@ export function apiPlugin(): Plugin {
               'Restaurant',
               'Area',
               'Cuisine',
+              'Rating',
+              'Opening Hours',
+              'Address',
+              'Latitude',
+              'Longitude',
               'Category',
               'Item Name',
               'Description',
@@ -473,6 +577,11 @@ export function apiPlugin(): Plugin {
                 JSON.stringify(item.restaurant || ''),
                 JSON.stringify(item.area || ''),
                 JSON.stringify(item.cuisine || ''),
+                item.rating != null ? item.rating : '',
+                JSON.stringify(item.opening_hours || ''),
+                JSON.stringify(item.address || ''),
+                item.lat != null ? item.lat : '',
+                item.lon != null ? item.lon : '',
                 JSON.stringify(item.category || ''),
                 JSON.stringify(item.item_name || ''),
                 JSON.stringify(item.description || ''),

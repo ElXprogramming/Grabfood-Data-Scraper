@@ -123,6 +123,55 @@ def parse_pdf(data: bytes) -> list:
     return parse_lines(text.splitlines())
 
 
+def extract_website_metadata(soup) -> dict:
+    meta = {}
+    for tag in soup.find_all("script", type="application/ld+json"):
+        try:
+            raw = tag.string or ""
+            data = json.loads(raw)
+            nodes = data if isinstance(data, list) else [data]
+            for node in nodes:
+                if not isinstance(node, dict):
+                    continue
+                types = node.get("@type", "")
+                types = types if isinstance(types, list) else [types]
+                types_lower = [str(t).lower() for t in types]
+                if any(t in types_lower for t in ("restaurant", "foodestablishment", "localbusiness", "bakery", "cafe", "barorpub", "fastfoodrestaurant")):
+                    if "telephone" in node and not meta.get("phone"):
+                        meta["phone"] = str(node["telephone"]).strip()
+                    if "servesCuisine" in node and not meta.get("cuisine"):
+                        c = node["servesCuisine"]
+                        meta["cuisine"] = ", ".join(c) if isinstance(c, list) else str(c).strip()
+                    if "openingHours" in node and not meta.get("opening_hours"):
+                        oh = node["openingHours"]
+                        meta["opening_hours"] = ", ".join(oh) if isinstance(oh, list) else str(oh).strip()
+                    if "aggregateRating" in node and not meta.get("rating"):
+                        ar = node["aggregateRating"]
+                        if isinstance(ar, dict) and "ratingValue" in ar:
+                            try:
+                                meta["rating"] = round(float(ar["ratingValue"]), 1)
+                            except (TypeError, ValueError):
+                                pass
+                    if "address" in node and not meta.get("address"):
+                        addr = node["address"]
+                        if isinstance(addr, dict):
+                            parts = [addr.get("streetAddress"), addr.get("addressLocality"), addr.get("postalCode")]
+                            meta["address"] = ", ".join(str(p).strip() for p in parts if p)
+                        elif isinstance(addr, str):
+                            meta["address"] = addr.strip()
+                    if "geo" in node:
+                        geo = node["geo"]
+                        if isinstance(geo, dict):
+                            try:
+                                if "latitude" in geo: meta["lat"] = round(float(geo["latitude"]), 6)
+                                if "longitude" in geo: meta["lon"] = round(float(geo["longitude"]), 6)
+                            except (TypeError, ValueError):
+                                pass
+        except Exception:
+            pass
+    return meta
+
+
 # ---------- page analysis ----------
 def analyse_page(html: str, base_url: str) -> PageResult:
     soup = BeautifulSoup(html, "html.parser")
@@ -150,6 +199,13 @@ def analyse_page(html: str, base_url: str) -> PageResult:
         src = img.get("src") or img.get("data-src") or ""
         if "menu" in (src + " " + (img.get("alt") or "")).lower():
             res.assets.append((urljoin(base_url, src), "image"))
+    
+    # Extract website restaurant parameters
+    site_meta = extract_website_metadata(soup)
+    for k, v in site_meta.items():
+        if v and k not in res.socials:
+            res.socials[k] = v
+
     res.items = parse_jsonld(soup) or parse_html_text(soup)
     return res
 

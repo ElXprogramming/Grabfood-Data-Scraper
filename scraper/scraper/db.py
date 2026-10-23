@@ -78,27 +78,88 @@ def haversine_m(lat1, lon1, lat2, lon2) -> float:
     return 2 * r * math.asin(math.sqrt(a))
 
 
-def _find_match(conn, rec) -> sqlite3.Row | None:
+def _clean_url(u: str | None) -> str:
+    if not u:
+        return ""
+    u = u.strip().split("?")[0].rstrip("/").lower()
+    return re.sub(r"^https?://(www\.)?", "", u)
+
+
+def _find_match(conn, rec: dict) -> sqlite3.Row | None:
+    # 1. Check unique identifiers
     for key in ("osm_id", "google_place_id"):
         if rec.get(key):
             row = conn.execute(f"SELECT * FROM restaurants WHERE {key}=?", (rec[key],)).fetchone()
             if row:
                 return row
-    if rec.get("lat") is None or rec.get("lon") is None:
+
+    # 2. Check canonical URL matches (GrabFood, Foodpanda, Website)
+    for col in ("grab_url", "foodpanda_url", "website"):
+        val = rec.get(col)
+        if val:
+            clean_val = _clean_url(val)
+            for row in conn.execute(f"SELECT * FROM restaurants WHERE {col} IS NOT NULL AND {col} != ''"):
+                c_row = _clean_url(row[col])
+                if c_row and (c_row == clean_val or clean_val in c_row or c_row in clean_val):
+                    return row
+
+    name = rec.get("name")
+    if not name:
         return None
-    n = _norm(rec["name"])
-    for row in conn.execute("SELECT * FROM restaurants WHERE lat IS NOT NULL"):
-        if haversine_m(rec["lat"], rec["lon"], row["lat"], row["lon"]) > 120:
-            continue
+    n = _norm(name)
+    if not n:
+        return None
+
+    all_rows = conn.execute("SELECT * FROM restaurants").fetchall()
+
+    # 3. Exact normalized name match
+    for row in all_rows:
         m = _norm(row["name"])
-        if n and m and (n == m or n in m or m in n or SequenceMatcher(None, n, m).ratio() >= 0.85):
+        if n == m:
+            if rec.get("lat") and row["lat"]:
+                if haversine_m(rec["lat"], rec["lon"], row["lat"], row["lon"]) < 3000:
+                    return row
+            else:
+                return row
+
+    # 4. Geographical coordinates proximity + name similarity
+    if rec.get("lat") is not None and rec.get("lon") is not None:
+        for row in all_rows:
+            if row["lat"] is not None and row["lon"] is not None:
+                dist = haversine_m(rec["lat"], rec["lon"], row["lat"], row["lon"])
+                m = _norm(row["name"])
+                ratio = SequenceMatcher(None, n, m).ratio()
+                if dist <= 120 and (n in m or m in n or ratio >= 0.65):
+                    return row
+                if dist <= 30 and ratio >= 0.40:
+                    return row
+
+    # 5. Same Area + high fuzzy name similarity or containment
+    rec_area = (rec.get("area") or "").lower()
+    for row in all_rows:
+        m = _norm(row["name"])
+        row_area = (row["area"] or "").lower()
+        same_area = (not rec_area or not row_area or rec_area == row_area)
+        ratio = SequenceMatcher(None, n, m).ratio()
+        if same_area and (ratio >= 0.82 or (len(n) >= 5 and (n in m or m in n))):
             return row
+
+    # 6. Phone number match
+    if rec.get("phone"):
+        rec_phone = re.sub(r"\D", "", str(rec["phone"]))
+        if len(rec_phone) >= 7:
+            for row in all_rows:
+                if row["phone"]:
+                    row_phone = re.sub(r"\D", "", str(row["phone"]))
+                    if rec_phone in row_phone or row_phone in rec_phone:
+                        return row
+
     return None
 
 
 def upsert_restaurant(conn, rec: dict) -> int:
-    """Insert or merge a restaurant. Existing non-empty values are never overwritten,
-    so OpenStreetMap and Google records for the same venue merge into one row."""
+    """Insert or merge a restaurant considering all parameters to avoid duplicates.
+    Enriches existing records with rating, cuisine, open hours, location, and links."""
     row = _find_match(conn, rec)
     if row is None:
         cols = [f for f in RESTAURANT_FIELDS if rec.get(f) not in (None, "")]
@@ -109,8 +170,17 @@ def upsert_restaurant(conn, rec: dict) -> int:
         )
         conn.commit()
         return cur.lastrowid
-    updates = {f: rec[f] for f in RESTAURANT_FIELDS
-               if rec.get(f) not in (None, "") and row[f] in (None, "")}
+
+    # Merge/enrich: new non-empty values update empty or outdated fields
+    updates = {}
+    for f in RESTAURANT_FIELDS:
+        new_val = rec.get(f)
+        if new_val not in (None, ""):
+            if row[f] in (None, ""):
+                updates[f] = new_val
+            elif f in ("rating", "cuisine", "opening_hours", "address", "lat", "lon", "area") and new_val != row[f]:
+                updates[f] = new_val
+
     if updates:
         sets = ",".join(f"{k}=?" for k in updates)
         conn.execute(f"UPDATE restaurants SET {sets}, updated_at=? WHERE id=?",
@@ -150,11 +220,12 @@ def log(conn, restaurant_id, source, status, detail=""):
 
 
 def set_fields(conn, restaurant_id: int, **fields):
-    fields = {k: v for k, v in fields.items() if v}
+    fields = {k: v for k, v in fields.items() if v not in (None, "")}
     if not fields:
         return
     sets = ",".join(f"{k}=?" for k in fields)
-    conn.execute(f"UPDATE restaurants SET {sets} WHERE id=?", list(fields.values()) + [restaurant_id])
+    conn.execute(f"UPDATE restaurants SET {sets}, updated_at=? WHERE id=?",
+                 list(fields.values()) + [now(), restaurant_id])
     conn.commit()
 
 
@@ -162,7 +233,7 @@ def export(conn, out_dir: Path) -> dict:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = [dict(r) for r in conn.execute(
-        "SELECT r.name AS restaurant, r.area, r.cuisine, r.address, r.lat, r.lon, r.website,"
+        "SELECT r.name AS restaurant, r.area, r.cuisine, r.rating, r.opening_hours, r.address, r.lat, r.lon, r.website,"
         " m.category, m.name AS item, m.description, m.price, m.currency, m.source, m.source_url, m.scraped_at"
         " FROM menu_items m JOIN restaurants r ON r.id=m.restaurant_id ORDER BY r.name, m.category, m.name")]
     with open(out_dir / "menu_items.csv", "w", newline="", encoding="utf-8-sig") as f:
@@ -176,3 +247,4 @@ def export(conn, out_dir: Path) -> dict:
             (r["id"],))]
     (out_dir / "restaurants.json").write_text(json.dumps(rests, indent=2, ensure_ascii=False), encoding="utf-8")
     return {"menu_items": len(rows), "restaurants": len(rests)}
+
