@@ -1,9 +1,9 @@
 import React from 'react';
-import { Database, Sparkles, BarChart3, Terminal, RefreshCw, Cpu, Flame } from 'lucide-react';
+import { Sparkles, BarChart2, Terminal, RefreshCw, Layers } from 'lucide-react';
 
 interface HeaderProps {
-  activeTab: 'scraper' | 'analytics' | 'datamining';
-  setActiveTab: (tab: 'scraper' | 'analytics' | 'datamining') => void;
+  activeTab: 'scraper' | 'analytics' | 'datamining' | 'architecture';
+  setActiveTab: (tab: 'scraper' | 'analytics' | 'datamining' | 'architecture') => void;
   itemCount: number;
   restaurantCount: number;
   onRefresh: () => void;
@@ -20,75 +20,72 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   return (
     <header className="app-header">
-      <div className="header-top">
-        <div className="brand-group">
-          <div className="brand-icon">
-            <Cpu className="icon-pulse" size={26} />
+      <div className="header-inner">
+        {/* Brand */}
+        <div className="header-brand">
+          <div className="brand-symbol">
+            <Terminal size={18} />
           </div>
-          <div className="brand-text">
-            <div className="brand-title-row">
-              <h1 className="brand-title">GastroMine KK</h1>
-              <span className="badge-fyp">FYP Data Studio</span>
-            </div>
-            <p className="brand-subtitle">
-              Automated GrabFood & Web Menu Scraping • 1Borneo / Alamesra Market Intelligence
-            </p>
+          <div className="brand-meta">
+            <span className="brand-name">GastroMine</span>
+            <span className="brand-tag">KK</span>
           </div>
         </div>
 
+        {/* Minimalist Tabs Navigation */}
+        <nav className="header-nav">
+          <button
+            className={`nav-link ${activeTab === 'scraper' ? 'active' : ''}`}
+            onClick={() => setActiveTab('scraper')}
+          >
+            <Terminal size={15} />
+            <span>Scraper</span>
+          </button>
+
+          <button
+            className={`nav-link ${activeTab === 'analytics' ? 'active' : ''}`}
+            onClick={() => setActiveTab('analytics')}
+          >
+            <BarChart2 size={15} />
+            <span>Analytics</span>
+          </button>
+
+          <button
+            className={`nav-link ${activeTab === 'datamining' ? 'active' : ''}`}
+            onClick={() => setActiveTab('datamining')}
+          >
+            <Sparkles size={15} />
+            <span>Mining Lab</span>
+          </button>
+
+          <button
+            className={`nav-link ${activeTab === 'architecture' ? 'active' : ''}`}
+            onClick={() => setActiveTab('architecture')}
+          >
+            <Layers size={15} />
+            <span>Architecture</span>
+          </button>
+        </nav>
+
+        {/* Status / Quick Stats */}
         <div className="header-status">
-          <div className="db-pill">
-            <Database size={15} className="pill-icon" />
-            <span className="db-status-dot"></span>
-            <span className="db-text">
-              SQLite: <strong>{itemCount}</strong> items • <strong>{restaurantCount}</strong> restaurants
+          <div className="status-pill" title="Local SQLite & Cloud Firestore connected">
+            <span className="status-dot"></span>
+            <span className="status-label">
+              {itemCount} dishes · {restaurantCount} venues
             </span>
           </div>
 
-          <div className="firebase-pill" title="Google Cloud Firestore Connected (restaurantdatascraper)">
-            <Flame size={14} className="pill-icon-fire" />
-            <span className="firebase-text">Firestore: Active</span>
-          </div>
-
           <button
-            className={`btn-refresh ${isRefreshing ? 'rotating' : ''}`}
+            className={`btn-ghost-icon ${isRefreshing ? 'is-spinning' : ''}`}
             onClick={onRefresh}
             title="Refresh database records"
             aria-label="Refresh database"
           >
-            <RefreshCw size={15} />
+            <RefreshCw size={14} />
           </button>
         </div>
       </div>
-
-      <nav className="header-nav">
-        <button
-          className={`nav-btn ${activeTab === 'scraper' ? 'active' : ''}`}
-          onClick={() => setActiveTab('scraper')}
-        >
-          <Terminal size={17} />
-          <span>Scraper Studio</span>
-          <span className="nav-badge">Live Scraping</span>
-        </button>
-
-        <button
-          className={`nav-btn ${activeTab === 'analytics' ? 'active' : ''}`}
-          onClick={() => setActiveTab('analytics')}
-        >
-          <BarChart3 size={17} />
-          <span>Data & Analytics</span>
-          <span className="nav-badge">{itemCount} Records</span>
-        </button>
-
-        <button
-          className={`nav-btn ${activeTab === 'datamining' ? 'active' : ''}`}
-          onClick={() => setActiveTab('datamining')}
-        >
-          <Sparkles size={17} />
-          <span>Data Mining & Science Lab</span>
-          <span className="nav-badge highlight">AI / ML</span>
-        </button>
-      </nav>
     </header>
   );
 };

@@ -3,12 +3,13 @@ import { Header } from './components/Header';
 import { ScraperStudio } from './components/ScraperStudio';
 import { AnalyticsDashboard } from './components/AnalyticsDashboard';
 import { DataMiningLab } from './components/DataMiningLab';
+import { TechArchitecture } from './components/TechArchitecture';
 import { api } from './api/client';
 import type { Restaurant, AnalyticsData } from './types';
 import './App.css';
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<'scraper' | 'analytics' | 'datamining'>('scraper');
+  const [activeTab, setActiveTab] = useState<'scraper' | 'analytics' | 'datamining' | 'architecture'>('scraper');
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -103,17 +104,16 @@ export function App() {
         {activeTab === 'datamining' && (
           <DataMiningLab analytics={analytics} />
         )}
+
+        {activeTab === 'architecture' && (
+          <TechArchitecture />
+        )}
       </main>
 
       <footer className="app-footer">
-        <div className="footer-content">
-          <p>
-            <strong>GastroMine KK</strong> • Automated Food Delivery Data Scraper & Market Analytics
-          </p>
-          <span className="footer-sub">
-            Built for 1Borneo Hypermall & Alamesra, Kota Kinabalu • Responsible Polite Scraping
-          </span>
-        </div>
+        <span className="footer-text">
+          GastroMine KK · 1Borneo & Alamesra Market Intelligence
+        </span>
       </footer>
     </div>
   );

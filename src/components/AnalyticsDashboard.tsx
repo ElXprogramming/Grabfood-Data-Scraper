@@ -1,12 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Search,
-  Filter,
-  ArrowUpDown,
-  Utensils,
-  DollarSign,
-  Store,
-  Layers,
   ChevronLeft,
   ChevronRight,
   Sparkles,
@@ -15,12 +9,10 @@ import {
   FileJson,
   Copy,
   Check,
-  TrendingUp,
-  Tag,
-  Star,
+  Store,
+  Layers,
   MapPin,
-  Clock,
-  ExternalLink,
+  Sliders,
 } from 'lucide-react';
 import { api } from '../api/client';
 import type { AnalyticsData, MenuItem, Restaurant } from '../types';
@@ -50,6 +42,9 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   const [sortBy, setSortBy] = useState<'price_asc' | 'price_desc' | 'name_asc' | 'name_desc' | 'rating_desc'>('price_desc');
   const [page, setPage] = useState<number>(0);
   const pageSize = 25;
+
+  const [activeChartTab, setActiveChartTab] = useState<'distribution' | 'venues' | 'categories'>('distribution');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState<boolean>(false);
 
   const [items, setItems] = useState<MenuItem[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
@@ -123,14 +118,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   const handleCopyForPandas = () => {
     const pythonCode = `# Quick Python Pandas Loader for GastroMine KK Dataset
 import pandas as pd
-import requests
 
 url = "http://localhost:5173${api.getExportUrl('csv')}"
 df = pd.read_csv(url)
-
-print("Dataset Summary:")
 print(df.info())
-print("\\nPrice & Rating Statistics:")
 print(df[['Price', 'Rating']].describe())
 `;
     navigator.clipboard.writeText(pythonCode);
@@ -138,293 +129,256 @@ print(df[['Price', 'Rating']].describe())
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const hasActiveFilters = Boolean(
+    selectedRestaurant || selectedCategory || selectedCuisine || minRating || minPrice || maxPrice || searchQuery
+  );
+
+  const handleResetFilters = () => {
+    setSelectedRestaurant('');
+    setSelectedCategory('');
+    setSelectedCuisine('');
+    setMinRating('');
+    setSearchQuery('');
+    setMinPrice('');
+    setMaxPrice('');
+    setPage(0);
+  };
+
   return (
-    <div className="analytics-dashboard">
-      {/* KPI Cards Header */}
+    <div className="view-container">
+      {/* Page Title & Minimal Actions */}
+      <div className="view-header">
+        <div>
+          <h2 className="view-title">Market Analytics</h2>
+          <p className="view-desc">
+            Aggregated pricing distributions, IQR spreads, and master menu dish database.
+          </p>
+        </div>
+
+        {/* Minimal Export Action Buttons */}
+        <div className="export-btn-group">
+          <a
+            href={api.getExportUrl('csv')}
+            download="restaurant_menus_1borneo.csv"
+            className="btn-ghost-sm"
+            title="Download CSV"
+          >
+            <FileSpreadsheet size={13} />
+            <span>CSV</span>
+          </a>
+
+          <a
+            href={api.getExportUrl('json')}
+            download="restaurant_menus_1borneo.json"
+            className="btn-ghost-sm"
+            title="Download JSON"
+          >
+            <FileJson size={13} />
+            <span>JSON</span>
+          </a>
+
+          <button
+            type="button"
+            className="btn-ghost-sm"
+            onClick={handleCopyForPandas}
+            title="Copy Python Pandas snippet"
+          >
+            {copied ? <Check size={13} className="text-success" /> : <Copy size={13} />}
+            <span>{copied ? 'Copied' : 'Python'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Minimalist Metric Strip (Stripe / Vercel style) */}
       {kpi && (
-        <div className="kpi-grid">
-          <div className="kpi-card">
-            <div className="kpi-icon-wrap bg-blue">
-              <Utensils size={20} />
-            </div>
-            <div className="kpi-data">
-              <span className="kpi-label">Harvested Dishes</span>
-              <strong className="kpi-value">{kpi.totalItems}</strong>
-              <span className="kpi-sub">Across active delivery menus</span>
-            </div>
+        <div className="metric-strip">
+          <div className="metric-cell">
+            <span className="metric-label">TOTAL DISHES</span>
+            <span className="metric-val">{kpi.totalItems}</span>
+            <span className="metric-sub">Across 10 venues</span>
           </div>
 
-          <div className="kpi-card">
-            <div className="kpi-icon-wrap bg-emerald">
-              <DollarSign size={20} />
-            </div>
-            <div className="kpi-data">
-              <span className="kpi-label">Market Mean Price</span>
-              <strong className="kpi-value">RM {kpi.avgPrice.toFixed(2)}</strong>
-              <span className="kpi-sub">Std Dev: ±RM {kpi.stdDev.toFixed(2)}</span>
-            </div>
+          <div className="metric-cell">
+            <span className="metric-label">MEAN PRICE</span>
+            <span className="metric-val">RM {kpi.avgPrice.toFixed(2)}</span>
+            <span className="metric-sub">Std dev: ±RM {kpi.stdDev.toFixed(2)}</span>
           </div>
 
-          <div className="kpi-card">
-            <div className="kpi-icon-wrap bg-purple">
-              <TrendingUp size={20} />
-            </div>
-            <div className="kpi-data">
-              <span className="kpi-label">Median &amp; Spread (IQR)</span>
-              <strong className="kpi-value">RM {kpi.medianPrice.toFixed(2)}</strong>
-              <span className="kpi-sub">
-                IQR: RM {kpi.iqr.toFixed(2)} (Q1: RM {kpi.q1.toFixed(2)} - Q3: RM {kpi.q3.toFixed(2)})
-              </span>
-            </div>
+          <div className="metric-cell">
+            <span className="metric-label">MEDIAN PRICE</span>
+            <span className="metric-val">RM {kpi.medianPrice.toFixed(2)}</span>
+            <span className="metric-sub">IQR: RM {kpi.iqr.toFixed(2)}</span>
           </div>
 
-          <div className="kpi-card">
-            <div className="kpi-icon-wrap bg-amber">
-              <Store size={20} />
-            </div>
-            <div className="kpi-data">
-              <span className="kpi-label">Tracked Establishments</span>
-              <strong className="kpi-value">
-                {kpi.scrapedRestaurants} / {kpi.totalRestaurants}
-              </strong>
-              <span className="kpi-sub">1Borneo &amp; Alamesra corridor</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Interactive Visualizations Section */}
-      {analytics && (
-        <div className="charts-grid">
-          {/* Chart 1: Price Distribution Histogram */}
-          <div className="chart-card">
-            <div className="chart-header">
-              <div className="chart-title-group">
-                <BarChart size={18} />
-                <div>
-                  <h4>Dish Price Distribution (Histogram)</h4>
-                  <p>Number of menu items grouped into Malaysian Ringgit price brackets</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="histogram-container">
-              {analytics.bins.map((bin) => {
-                const total = kpi?.totalItems || 1;
-                const pct = Math.round((bin.count / total) * 100);
-                const maxBin = Math.max(...analytics.bins.map((b) => b.count), 1);
-                const heightPct = Math.max(8, Math.round((bin.count / maxBin) * 100));
-
-                return (
-                  <div key={bin.label} className="histogram-col" title={`${bin.label}: ${bin.count} items (${pct}%)`}>
-                    <div className="bar-wrapper">
-                      <div
-                        className="bar-fill"
-                        style={{ height: `${heightPct}%` }}
-                      >
-                        <span className="bar-count">{bin.count}</span>
-                      </div>
-                    </div>
-                    <span className="bin-label">{bin.label}</span>
-                    <span className="bin-pct">{pct}%</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Chart 2: Restaurant Pricing Benchmark */}
-          <div className="chart-card">
-            <div className="chart-header">
-              <div className="chart-title-group">
-                <Store size={18} />
-                <div>
-                  <h4>Restaurant Price Spread &amp; Parameters</h4>
-                  <p>Min, Average, and Max menu price benchmarks per brand</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="rest-benchmarks">
-              {analytics.restaurantBreakdown.map((r) => {
-                const maxRange = 50;
-                const minPct = Math.min(100, (r.min_price / maxRange) * 100);
-                const avgPct = Math.min(100, (r.avg_price / maxRange) * 100);
-                const maxPct = Math.min(100, (r.max_price / maxRange) * 100);
-
-                return (
-                  <div key={r.id} className="rest-benchmark-row">
-                    <div className="rest-meta">
-                      <div className="rest-meta-left">
-                        <strong className="rest-name">{r.name}</strong>
-                        {r.rating && (
-                          <span className="rating-pill-sm">
-                            <Star size={10} fill="currentColor" /> {r.rating}
-                          </span>
-                        )}
-                        {r.area && (
-                          <a
-                            href={getGoogleMapsUrl({
-                              lat: r.lat,
-                              lon: r.lon,
-                              address: r.address,
-                              name: r.name,
-                              area: r.area,
-                            })}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="area-pill-sm area-link"
-                            title={`Open ${r.name} in Google Maps`}
-                          >
-                            <MapPin size={9} />
-                            <span>{r.area}</span>
-                          </a>
-                        )}
-                      </div>
-                      <span className="rest-items-badge">{r.item_count} dishes</span>
-                    </div>
-
-                    <div className="benchmark-bar-track">
-                      {/* Price Range Span */}
-                      <div
-                        className="price-span"
-                        style={{
-                          left: `${minPct}%`,
-                          width: `${Math.max(4, maxPct - minPct)}%`,
-                        }}
-                      ></div>
-
-                      {/* Average Point */}
-                      <div
-                        className="price-avg-point"
-                        style={{ left: `${avgPct}%` }}
-                        title={`Average: RM ${r.avg_price.toFixed(2)}`}
-                      >
-                        <span className="avg-tooltip">RM {r.avg_price.toFixed(2)}</span>
-                      </div>
-                    </div>
-
-                    <div className="benchmark-values">
-                      <span>Min: RM {r.min_price.toFixed(2)}</span>
-                      <span>Avg: RM {r.avg_price.toFixed(2)}</span>
-                      <span>Max: RM {r.max_price.toFixed(2)}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Chart 3: Top Categories Breakdown */}
-          <div className="chart-card full-width">
-            <div className="chart-header">
-              <div className="chart-title-group">
-                <Layers size={18} />
-                <div>
-                  <h4>Menu Category Volume &amp; Price Profile</h4>
-                  <p>Dish diversity and average meal cost across major category classifications</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="categories-grid">
-              {analytics.categories.slice(0, 8).map((cat) => {
-                const maxCatCount = analytics.categories[0]?.count || 1;
-                const fillWidth = Math.max(10, Math.round((cat.count / maxCatCount) * 100));
-
-                return (
-                  <div key={cat.category} className="category-metric-card">
-                    <div className="cat-top">
-                      <strong className="cat-title">{cat.category}</strong>
-                      <span className="cat-avg-tag">Avg RM {cat.avg_price.toFixed(2)}</span>
-                    </div>
-                    <div className="cat-bar-bg">
-                      <div className="cat-bar-fill" style={{ width: `${fillWidth}%` }}></div>
-                    </div>
-                    <div className="cat-bottom">
-                      <span>{cat.count} menu items</span>
-                      <span>Range: RM {cat.min_price.toFixed(2)} - RM {cat.max_price.toFixed(2)}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Data Explorer & Master Table Section */}
-      <div className="data-table-section">
-        <div className="table-controls-header">
-          <div className="table-title-group">
-            <h3>Master Menu Dataset Explorer</h3>
-            <span className="record-count-badge">
-              {totalCount} matching {totalCount === 1 ? 'dish' : 'dishes'}
+          <div className="metric-cell">
+            <span className="metric-label">VENUES TRACKED</span>
+            <span className="metric-val">
+              {kpi.scrapedRestaurants} <span className="metric-dim">/ {kpi.totalRestaurants}</span>
             </span>
-          </div>
-
-          {/* Export & Pandas Tools */}
-          <div className="export-actions">
-            <a
-              href={api.getExportUrl('csv')}
-              download="restaurant_menus_1borneo.csv"
-              className="btn-export csv"
-              title="Download entire dataset as CSV with ratings and locations"
-            >
-              <FileSpreadsheet size={15} />
-              <span>Export CSV</span>
-            </a>
-
-            <a
-              href={api.getExportUrl('json')}
-              download="restaurant_menus_1borneo.json"
-              className="btn-export json"
-              title="Download entire dataset as JSON"
-            >
-              <FileJson size={15} />
-              <span>Export JSON</span>
-            </a>
-
-            <button
-              className="btn-export copy"
-              onClick={handleCopyForPandas}
-              title="Copy Python Pandas snippet to clipboard"
-            >
-              {copied ? <Check size={15} className="text-green" /> : <Copy size={15} />}
-              <span>{copied ? 'Copied Code!' : 'Python Pandas'}</span>
-            </button>
+            <span className="metric-sub">1Borneo & Alamesra</span>
           </div>
         </div>
+      )}
 
-        {/* Filter Bar */}
-        <div className="filter-bar">
-          <div className="search-box">
-            <Search size={16} className="search-icon" />
+      {/* Visualizations Card with Segmented Switcher */}
+      {analytics && (
+        <div className="chart-wrapper-card">
+          <div className="chart-top-bar">
+            <div className="chart-tabs">
+              <button
+                type="button"
+                className={`chart-tab ${activeChartTab === 'distribution' ? 'active' : ''}`}
+                onClick={() => setActiveChartTab('distribution')}
+              >
+                <BarChart size={14} />
+                <span>Price Distribution</span>
+              </button>
+
+              <button
+                type="button"
+                className={`chart-tab ${activeChartTab === 'venues' ? 'active' : ''}`}
+                onClick={() => setActiveChartTab('venues')}
+              >
+                <Store size={14} />
+                <span>Venue Ranges</span>
+              </button>
+
+              <button
+                type="button"
+                className={`chart-tab ${activeChartTab === 'categories' ? 'active' : ''}`}
+                onClick={() => setActiveChartTab('categories')}
+              >
+                <Layers size={14} />
+                <span>Categories</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Tab 1: Price Distribution Histogram */}
+          {activeChartTab === 'distribution' && (
+            <div className="tab-pane">
+              <div className="histogram-minimal">
+                {analytics.bins.map((bin) => {
+                  const total = kpi?.totalItems || 1;
+                  const pct = Math.round((bin.count / total) * 100);
+                  const maxBin = Math.max(...analytics.bins.map((b) => b.count), 1);
+                  const heightPct = Math.max(6, Math.round((bin.count / maxBin) * 100));
+
+                  return (
+                    <div
+                      key={bin.label}
+                      className="hist-col"
+                      title={`${bin.label}: ${bin.count} dishes (${pct}%)`}
+                    >
+                      <div className="hist-bar-outer">
+                        <div
+                          className="hist-bar-inner"
+                          style={{ height: `${heightPct}%` }}
+                        >
+                          <span className="hist-count">{bin.count}</span>
+                        </div>
+                      </div>
+                      <span className="hist-label">{bin.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Tab 2: Restaurant Spread & Benchmarks */}
+          {activeChartTab === 'venues' && (
+            <div className="tab-pane">
+              <div className="venue-ranges-list">
+                {analytics.restaurantBreakdown.map((r) => {
+                  const maxRange = 50;
+                  const minPct = Math.min(100, (r.min_price / maxRange) * 100);
+                  const avgPct = Math.min(100, (r.avg_price / maxRange) * 100);
+                  const maxPct = Math.min(100, (r.max_price / maxRange) * 100);
+
+                  return (
+                    <div key={r.id} className="venue-range-row">
+                      <div className="venue-range-info">
+                        <span className="venue-range-name">{r.name}</span>
+                        <span className="venue-range-meta">
+                          {r.rating ? `★ ${r.rating} · ` : ''}
+                          {r.item_count} dishes
+                        </span>
+                      </div>
+
+                      <div className="range-track-container">
+                        <div
+                          className="range-span"
+                          style={{
+                            left: `${minPct}%`,
+                            width: `${Math.max(3, maxPct - minPct)}%`,
+                          }}
+                        />
+                        <div
+                          className="range-avg-marker"
+                          style={{ left: `${avgPct}%` }}
+                          title={`Avg: RM ${r.avg_price.toFixed(2)}`}
+                        />
+                      </div>
+
+                      <div className="range-values-inline">
+                        <span className="text-dim">RM {r.min_price.toFixed(0)}</span>
+                        <strong>RM {r.avg_price.toFixed(2)}</strong>
+                        <span className="text-dim">RM {r.max_price.toFixed(0)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Tab 3: Top Categories Breakdown */}
+          {activeChartTab === 'categories' && (
+            <div className="tab-pane">
+              <div className="category-bars-list">
+                {analytics.categories.slice(0, 10).map((cat) => {
+                  const maxCatCount = analytics.categories[0]?.count || 1;
+                  const fillWidth = Math.max(5, Math.round((cat.count / maxCatCount) * 100));
+
+                  return (
+                    <div key={cat.category} className="cat-minimal-row">
+                      <div className="cat-minimal-info">
+                        <span className="cat-minimal-title">{cat.category}</span>
+                        <span className="cat-minimal-price">avg RM {cat.avg_price.toFixed(2)}</span>
+                      </div>
+                      <div className="cat-track">
+                        <div className="cat-fill" style={{ width: `${fillWidth}%` }}></div>
+                      </div>
+                      <span className="cat-minimal-count">{cat.count}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Master Menu Dataset Explorer */}
+      <div className="table-card">
+        {/* Compact Filters Toolbar */}
+        <div className="toolbar-row">
+          <div className="toolbar-search">
+            <Search size={14} className="search-icon" />
             <input
               type="text"
-              placeholder="Search dishes, restaurants, cuisine tags..."
+              placeholder="Search dishes or venues..."
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
                 setPage(0);
               }}
+              className="toolbar-input"
             />
-            {searchQuery && (
-              <button
-                className="clear-search"
-                onClick={() => {
-                  setSearchQuery('');
-                  setPage(0);
-                }}
-              >
-                ✕
-              </button>
-            )}
           </div>
 
-          <div className="filter-group">
-            <Filter size={15} className="filter-icon" />
-
+          <div className="toolbar-filters">
             {/* Restaurant Filter */}
             <select
               value={selectedRestaurant}
@@ -432,9 +386,9 @@ print(df[['Price', 'Rating']].describe())
                 setSelectedRestaurant(e.target.value);
                 setPage(0);
               }}
-              className="filter-select"
+              className="toolbar-select"
             >
-              <option value="">All Restaurants</option>
+              <option value="">All Venues</option>
               {restaurants
                 .filter((r) => r.item_count > 0)
                 .map((r) => (
@@ -444,39 +398,6 @@ print(df[['Price', 'Rating']].describe())
                 ))}
             </select>
 
-            {/* Cuisine Filter */}
-            {availableCuisines.length > 0 && (
-              <select
-                value={selectedCuisine}
-                onChange={(e) => {
-                  setSelectedCuisine(e.target.value);
-                  setPage(0);
-                }}
-                className="filter-select"
-              >
-                <option value="">All Cuisines</option>
-                {availableCuisines.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            )}
-
-            {/* Rating Filter */}
-            <select
-              value={minRating}
-              onChange={(e) => {
-                setMinRating(e.target.value);
-                setPage(0);
-              }}
-              className="filter-select"
-            >
-              <option value="">Any Rating</option>
-              <option value="4.0">⭐ 4.0 &amp; Above</option>
-              <option value="4.5">⭐ 4.5 &amp; Above</option>
-            </select>
-
             {/* Category Filter */}
             <select
               value={selectedCategory}
@@ -484,7 +405,7 @@ print(df[['Price', 'Rating']].describe())
                 setSelectedCategory(e.target.value);
                 setPage(0);
               }}
-              className="filter-select"
+              className="toolbar-select"
             >
               <option value="">All Categories</option>
               {availableCategories.map((c) => (
@@ -494,24 +415,97 @@ print(df[['Price', 'Rating']].describe())
               ))}
             </select>
 
-            {/* Price Inputs */}
-            <div className="price-inputs">
-              <span className="price-label">RM</span>
+            {/* Sort Selector */}
+            <select
+              value={sortBy}
+              onChange={(e) => {
+                setSortBy(e.target.value as 'price_asc' | 'price_desc' | 'name_asc' | 'name_desc' | 'rating_desc');
+                setPage(0);
+              }}
+              className="toolbar-select"
+            >
+              <option value="price_desc">Price: High to Low</option>
+              <option value="price_asc">Price: Low to High</option>
+              <option value="rating_desc">Rating: Highest</option>
+              <option value="name_asc">Name: A to Z</option>
+            </select>
+
+            {/* More Filters Toggle */}
+            <button
+              type="button"
+              className={`btn-ghost-sm ${showAdvancedFilters ? 'active' : ''}`}
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            >
+              <Sliders size={12} />
+              <span>Filter</span>
+            </button>
+
+            {hasActiveFilters && (
+              <button
+                type="button"
+                className="btn-ghost-sm text-dim"
+                onClick={handleResetFilters}
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Collapsible Advanced Filters Drawer */}
+        {showAdvancedFilters && (
+          <div className="advanced-filters-bar">
+            <div className="filter-item">
+              <label>Cuisine</label>
+              <select
+                value={selectedCuisine}
+                onChange={(e) => {
+                  setSelectedCuisine(e.target.value);
+                  setPage(0);
+                }}
+              >
+                <option value="">Any Cuisine</option>
+                {availableCuisines.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="filter-item">
+              <label>Min Rating</label>
+              <select
+                value={minRating}
+                onChange={(e) => {
+                  setMinRating(e.target.value);
+                  setPage(0);
+                }}
+              >
+                <option value="">Any</option>
+                <option value="4.0">★ 4.0+</option>
+                <option value="4.5">★ 4.5+</option>
+              </select>
+            </div>
+
+            <div className="filter-item">
+              <label>Min Price (RM)</label>
               <input
                 type="number"
-                placeholder="Min"
-                className="price-num"
+                placeholder="0"
                 value={minPrice}
                 onChange={(e) => {
                   setMinPrice(e.target.value);
                   setPage(0);
                 }}
               />
-              <span className="price-sep">-</span>
+            </div>
+
+            <div className="filter-item">
+              <label>Max Price (RM)</label>
               <input
                 type="number"
-                placeholder="Max"
-                className="price-num"
+                placeholder="100"
                 value={maxPrice}
                 onChange={(e) => {
                   setMaxPrice(e.target.value);
@@ -519,168 +513,101 @@ print(df[['Price', 'Rating']].describe())
                 }}
               />
             </div>
-
-            {/* Sort Selector */}
-            <div className="sort-group">
-              <ArrowUpDown size={15} />
-              <select
-                value={sortBy}
-                onChange={(e) => {
-                  setSortBy(e.target.value as 'price_asc' | 'price_desc' | 'name_asc' | 'name_desc' | 'rating_desc');
-                  setPage(0);
-                }}
-                className="filter-select sort"
-              >
-                <option value="price_desc">Price: High to Low</option>
-                <option value="price_asc">Price: Low to High</option>
-                <option value="rating_desc">Rating: High to Low</option>
-                <option value="name_asc">Name: A to Z</option>
-                <option value="name_desc">Name: Z to A</option>
-              </select>
-            </div>
           </div>
-        </div>
+        )}
 
-        {/* Master Table */}
+        {/* Minimalist Dishes Table */}
         <div className="table-responsive">
-          <table className="master-table">
+          <table className="clean-table">
             <thead>
               <tr>
-                <th>Dish / Menu Item</th>
-                <th>Restaurant &amp; Rating</th>
-                <th>Cuisine &amp; Hours</th>
-                <th>Location / Coordinates</th>
+                <th>Dish</th>
+                <th>Venue</th>
                 <th>Category</th>
-                <th className="th-price">Price (MYR)</th>
-                <th>Platform</th>
+                <th>Rating</th>
+                <th className="align-right">Price</th>
               </tr>
             </thead>
             <tbody>
               {isLoadingItems ? (
                 <tr>
-                  <td colSpan={7} className="table-loading-cell">
-                    <div className="loading-spinner-row">
-                      <Sparkles size={18} className="spin-icon" />
-                      <span>Loading records from SQLite...</span>
-                    </div>
+                  <td colSpan={5} className="table-loading-cell">
+                    <Sparkles size={14} className="is-spinning" />
+                    <span>Loading...</span>
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="table-empty-cell">
-                    <p>No dishes matched your filter criteria.</p>
-                    <button
-                      className="btn-reset-filters"
-                      onClick={() => {
-                        setSelectedRestaurant('');
-                        setSelectedCategory('');
-                        setSelectedCuisine('');
-                        setMinRating('');
-                        setSearchQuery('');
-                        setMinPrice('');
-                        setMaxPrice('');
-                        setPage(0);
-                      }}
-                    >
-                      Reset All Filters
-                    </button>
+                  <td colSpan={5} className="table-empty-cell">
+                    <span>No dishes matched your criteria.</span>
+                    {hasActiveFilters && (
+                      <button
+                        type="button"
+                        className="btn-tiny"
+                        onClick={handleResetFilters}
+                      >
+                        Reset Filters
+                      </button>
+                    )}
                   </td>
                 </tr>
               ) : (
                 items.map((item) => (
                   <tr key={item.id}>
+                    {/* Dish Name */}
                     <td>
-                      <div className="item-name-cell">
-                        <strong className="item-name">{item.name}</strong>
+                      <div className="dish-cell">
+                        <span className="dish-title">{item.name}</span>
                         {item.description && (
-                          <span className="item-description" title={item.description}>
+                          <span className="dish-sub" title={item.description}>
                             {item.description}
                           </span>
                         )}
                       </div>
                     </td>
+
+                    {/* Venue */}
                     <td>
-                      <div className="table-rest-col">
-                        <span className="restaurant-tag">{item.restaurant_name}</span>
-                        {item.rating ? (
-                          <span className="table-rating-pill">
-                            <Star size={11} fill="currentColor" /> {item.rating}
-                          </span>
-                        ) : (
-                          <span className="table-no-rating">Unrated</span>
+                      <div className="table-venue-link">
+                        <span>{item.restaurant_name}</span>
+                        {item.area && (
+                          <a
+                            href={getGoogleMapsUrl({
+                              lat: item.lat,
+                              lon: item.lon,
+                              address: item.address,
+                              name: item.restaurant_name,
+                              area: item.area,
+                            })}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-map-icon"
+                            title={item.address || 'Open in Maps'}
+                          >
+                            <MapPin size={10} />
+                          </a>
                         )}
                       </div>
                     </td>
+
+                    {/* Category */}
                     <td>
-                      <div className="table-cuisine-col">
-                        <span className="table-cuisine-text">{item.cuisine || 'General'}</span>
-                        {item.opening_hours && (
-                          <span className="table-hours-text" title={item.opening_hours}>
-                            <Clock size={10} /> {item.opening_hours}
-                          </span>
-                        )}
-                      </div>
+                      <span className="clean-tag">{item.category || 'General'}</span>
                     </td>
+
+                    {/* Rating */}
                     <td>
-                      <div className="table-location-col">
-                        <a
-                          href={getGoogleMapsUrl({
-                            lat: item.lat,
-                            lon: item.lon,
-                            address: item.address,
-                            name: item.restaurant_name,
-                            area: item.area,
-                          })}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="table-area-text area-link"
-                          title={`Open ${item.restaurant_name} on Google Maps`}
-                        >
-                          <MapPin size={11} />
-                          <span>{item.area || '1Borneo/Alamesra'}</span>
-                          <ExternalLink size={9} className="link-ext-icon" />
-                        </a>
-                        {item.lat && item.lon ? (
-                          <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lon}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="table-coords-text coords-link"
-                            title={`Google Maps Pin: ${item.lat}, ${item.lon}`}
-                          >
-                            📍 {item.lat.toFixed(3)}, {item.lon.toFixed(3)}
-                          </a>
-                        ) : item.address ? (
-                          <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                              item.address.toLowerCase().includes('kinabalu')
-                                ? item.address
-                                : `${item.address}, Kota Kinabalu`
-                            )}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="table-address-text address-link"
-                            title={`Open in Google Maps: ${item.address}`}
-                          >
-                            <span>{item.address}</span>
-                          </a>
-                        ) : null}
-                      </div>
+                      {item.rating ? (
+                        <span className="rating-text">★ {item.rating}</span>
+                      ) : (
+                        <span className="text-dim">—</span>
+                      )}
                     </td>
-                    <td>
-                      <span className="category-pill">
-                        <Tag size={11} />
-                        {item.category || 'General'}
-                      </span>
-                    </td>
-                    <td className="td-price">
-                      <strong className="price-badge">
+
+                    {/* Price */}
+                    <td className="align-right">
+                      <span className="clean-price">
                         RM {item.price ? item.price.toFixed(2) : '0.00'}
-                      </strong>
-                    </td>
-                    <td>
-                      <span className={`source-badge ${item.source === 'grabfood' ? 'grab' : 'web'}`}>
-                        {item.source === 'grabfood' ? '🛵 Grab' : '🌐 Web'}
                       </span>
                     </td>
                   </tr>
@@ -690,35 +617,36 @@ print(df[['Price', 'Rating']].describe())
           </table>
         </div>
 
-        {/* Pagination Bar */}
+        {/* Minimalist Pagination Bar */}
         {totalPages > 1 && (
-          <div className="pagination-bar">
-            <span className="pagination-info">
-              Showing {page * pageSize + 1} - {Math.min((page + 1) * pageSize, totalCount)} of{' '}
-              {totalCount} dishes
+          <div className="pagination-strip">
+            <span className="pagination-text">
+              Showing {page * pageSize + 1}–{Math.min((page + 1) * pageSize, totalCount)} of {totalCount}
             </span>
 
-            <div className="pagination-buttons">
+            <div className="pagination-nav">
               <button
-                className="btn-page"
+                type="button"
+                className="btn-page-icon"
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0}
+                aria-label="Previous page"
               >
-                <ChevronLeft size={16} />
-                <span>Prev</span>
+                <ChevronLeft size={14} />
               </button>
 
-              <span className="page-current">
-                Page {page + 1} of {totalPages}
+              <span className="page-indicator">
+                {page + 1} / {totalPages}
               </span>
 
               <button
-                className="btn-page"
+                type="button"
+                className="btn-page-icon"
                 onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                 disabled={page >= totalPages - 1}
+                aria-label="Next page"
               >
-                <span>Next</span>
-                <ChevronRight size={16} />
+                <ChevronRight size={14} />
               </button>
             </div>
           </div>

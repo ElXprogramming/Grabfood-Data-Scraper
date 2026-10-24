@@ -1,27 +1,21 @@
 import React, { useState } from 'react';
 import {
-  Globe,
   Play,
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Compass,
   Link as LinkIcon,
-  Sparkles,
   ExternalLink,
-  Layers,
-  Clock,
   Terminal as TerminalIcon,
-  PlusCircle,
+  Plus,
   Check,
-  Star,
   MapPin,
-  Tag,
-  ShieldCheck,
   Sliders,
   ChevronDown,
   ChevronUp,
-  Edit3,
+  Edit2,
+  Search,
+  ArrowRight,
 } from 'lucide-react';
 import { api } from '../api/client';
 import type { Restaurant, ScrapeResult } from '../types';
@@ -78,7 +72,10 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
   const [lon, setLon] = useState('');
   const [area, setArea] = useState('');
   const [renderBrowser, setRenderBrowser] = useState(false);
-  const [showAdvancedParams, setShowAdvancedParams] = useState(false);
+  const [showOptions, setShowOptions] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
+  const [showDishesPreview, setShowDishesPreview] = useState(false);
+  const [tableSearch, setTableSearch] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ScrapeResult | null>(null);
@@ -87,12 +84,12 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
     {
       id: 'init-1',
       time: new Date().toLocaleTimeString(),
-      text: 'Scraper engine initialized with multi-parameter deduplication and metadata extraction.',
+      text: 'Scraper engine ready. Awaiting URL input.',
       type: 'info',
     },
   ]);
 
-  // Modal State for attaching link or editing location
+  // Modal State for editing restaurant metadata
   const [editRestaurant, setEditRestaurant] = useState<Restaurant | null>(null);
   const [modalUrl, setModalUrl] = useState('');
   const [modalRating, setModalRating] = useState('');
@@ -104,13 +101,13 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
   const [modalArea, setModalArea] = useState('');
   const [modalSuccess, setModalSuccess] = useState(false);
 
-  // Auto-detect platform from URL
+  // Platform detector
   const detectPlatform = (targetUrl: string) => {
     const low = targetUrl.toLowerCase();
-    if (low.includes('grab.com')) return { name: 'GrabFood', color: 'badge-grab', icon: '🛵' };
-    if (low.includes('foodpanda')) return { name: 'Foodpanda', color: 'badge-panda', icon: '🐼' };
+    if (low.includes('grab.com')) return { name: 'GrabFood', color: 'badge-grab' };
+    if (low.includes('foodpanda')) return { name: 'Foodpanda', color: 'badge-panda' };
     if (low.startsWith('http://') || low.startsWith('https://')) {
-      return { name: 'Direct Website', color: 'badge-web', icon: '🌐' };
+      return { name: 'Web Menu', color: 'badge-web' };
     }
     return null;
   };
@@ -132,11 +129,12 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
   const handleStartScraping = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!url.trim()) {
-      setError('Please provide a valid restaurant or delivery URL.');
+      setError('Please provide a valid menu URL.');
       return;
     }
 
     setIsLoading(true);
+    setShowLogs(true);
     setError(null);
     setResult(null);
 
@@ -144,11 +142,11 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
     addLog(`Initiating scraping task for ${platformLabel}: ${url}`, 'info');
 
     if (renderBrowser) {
-      addLog('Headless Chromium engine enabled (--render) for dynamic JS rendering.', 'info');
+      addLog('Headless browser engine enabled (--render) for client-side JS.', 'info');
     }
 
     try {
-      addLog('Connecting to destination host & capturing menu and store metadata...', 'info');
+      addLog('Fetching DOM & intercepting menu payloads...', 'info');
       const res = await api.scrapeUrl({
         url,
         name: restaurantName || undefined,
@@ -167,37 +165,26 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
 
         if (res.isMerged) {
           addLog(
-            `🛡️ Deduplicated: Matched existing venue "${res.restaurantName}" (ID #${res.restaurantId}) across parameters. Data merged without creating duplicates.`,
+            `Deduplicated: Matched venue "${res.restaurantName}" (ID #${res.restaurantId}). Merged records.`,
             'warn'
           );
         }
 
         addLog(
-          `Success! Harvested ${res.itemsCount || 0} menu items from "${res.restaurantName}" in ${(
+          `Success: Parsed ${res.itemsCount || 0} dishes from "${res.restaurantName}" in ${(
             (res.elapsedMs || 0) / 1000
           ).toFixed(1)}s`,
           'success'
         );
 
-        if (res.rating) addLog(`Attached rating: ⭐ ${res.rating}`, 'info');
-        if (res.cuisine) addLog(`Attached cuisine tags: ${res.cuisine}`, 'info');
-        if (res.openingHours) addLog(`Attached open hours: 🕒 ${res.openingHours}`, 'info');
-        if (res.address || res.lat) {
-          addLog(
-            `Attached location: 📍 ${res.address || ''} (${res.lat || '?'}, ${res.lon || '?'})`,
-            'info'
-          );
-        }
-
-        addLog('Saved and indexed into local SQLite database (menus.db)', 'success');
         onScrapeSuccess();
       } else {
         const errMsg = res.error || 'Failed to extract items from the provided link.';
         setError(errMsg);
-        addLog(`Scraping error: ${errMsg}`, 'error');
+        addLog(`Error: ${errMsg}`, 'error');
       }
     } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : 'Scraper encountered an unexpected error.';
+      const errMsg = err instanceof Error ? err.message : 'Unexpected scraper error.';
       setError(errMsg);
       addLog(`Failed execution: ${errMsg}`, 'error');
     } finally {
@@ -208,13 +195,9 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
   const handleApplyPreset = (preset: (typeof PRESETS)[0]) => {
     setUrl(preset.url);
     setRestaurantName(preset.name);
-    if (preset.platform === 'Website') {
-      setRenderBrowser(true);
-    } else {
-      setRenderBrowser(false);
-    }
+    setRenderBrowser(preset.platform === 'Website');
     setError(null);
-    addLog(`Loaded preset for "${preset.name}" (${preset.platform})`, 'info');
+    addLog(`Preset selected: ${preset.name}`, 'info');
   };
 
   const handleOpenEditModal = (r: Restaurant) => {
@@ -249,12 +232,12 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
       }
 
       setModalSuccess(true);
-      addLog(`Updated location & metadata parameters for "${editRestaurant.name}"`, 'success');
+      addLog(`Updated metadata for "${editRestaurant.name}"`, 'success');
       setTimeout(() => {
         setModalSuccess(false);
         setEditRestaurant(null);
         onScrapeSuccess();
-      }, 800);
+      }, 700);
     } catch (err: unknown) {
       alert(`Error saving updates: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -274,57 +257,39 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
     }
   };
 
-  return (
-    <div className="scraper-studio">
-      {/* Top Banner */}
-      <div className="studio-hero">
-        <div className="studio-hero-content">
-          <div className="hero-badge">
-            <Sparkles size={14} />
-            <span>Multi-Parameter Scraping & Deduplication Engine</span>
-          </div>
-          <h2>Scrape Restaurant Menus, Ratings & Locations</h2>
-          <p>
-            Extract menu dishes along with <strong>ratings</strong>, <strong>cuisine tags</strong>,{' '}
-            <strong>operating hours</strong>, and <strong>geographical coordinates</strong>. Our engine
-            automatically matches URLs, names, and spatial proximity to prevent duplicate records.
-          </p>
-        </div>
+  // Filtered restaurants for table
+  const filteredRestaurants = restaurants.filter((r) => {
+    if (!tableSearch) return true;
+    const query = tableSearch.toLowerCase();
+    return (
+      r.name.toLowerCase().includes(query) ||
+      (r.area && r.area.toLowerCase().includes(query)) ||
+      (r.cuisine && r.cuisine.toLowerCase().includes(query))
+    );
+  });
 
-        <div className="hero-presets">
-          <span className="preset-label">Quick Test Presets:</span>
-          <div className="preset-buttons">
-            {PRESETS.map((p) => (
-              <button
-                key={p.name}
-                type="button"
-                className="preset-btn"
-                onClick={() => handleApplyPreset(p)}
-              >
-                <span>{p.platform === 'GrabFood' ? '🛵' : '🌐'}</span>
-                <span>{p.name}</span>
-              </button>
-            ))}
-          </div>
+  return (
+    <div className="view-container">
+      {/* Page Title & Minimal Action Bar */}
+      <div className="view-header">
+        <div>
+          <h2 className="view-title">Scraper Studio</h2>
+          <p className="view-desc">
+            Harvest menu items, pricing, and spatial coordinates into local SQLite and Cloud Firestore.
+          </p>
         </div>
       </div>
 
-      {/* Main Scraper Form Box */}
-      <div className="scraper-card">
+      {/* Scraper Input Command Bar */}
+      <div className="command-card">
         <form onSubmit={handleStartScraping}>
-          <div className="form-group url-input-group">
-            <label htmlFor="scrape-url" className="form-label">
-              <LinkIcon size={16} />
-              <span>Target Menu URL</span>
-              <span className="required-tag">Required</span>
-            </label>
-
-            <div className="input-with-badge">
+          <div className="command-bar">
+            <div className="command-input-wrap">
+              <LinkIcon size={16} className="command-icon" />
               <input
-                id="scrape-url"
                 type="url"
-                className="url-field"
-                placeholder="https://food.grab.com/my/en/restaurant/... or https://restaurant.com/menu"
+                className="command-input"
+                placeholder="Enter GrabFood, Foodpanda, or restaurant menu URL..."
                 value={url}
                 onChange={(e) => {
                   setUrl(e.target.value);
@@ -333,381 +298,330 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
                 disabled={isLoading}
                 required
               />
-
               {detectedPlatform && (
-                <div className={`detected-badge ${detectedPlatform.color}`}>
-                  <span>{detectedPlatform.icon}</span>
-                  <span>{detectedPlatform.name}</span>
-                </div>
+                <span className={`platform-pill ${detectedPlatform.color}`}>
+                  {detectedPlatform.name}
+                </span>
               )}
             </div>
-          </div>
 
-          <div className="form-row-dual">
-            <div className="form-group flex-1">
-              <label htmlFor="scrape-name" className="form-label">
-                <span>Restaurant Name</span>
-                <span className="optional-tag">Auto-detected from URL/metadata if omitted</span>
-              </label>
-              <input
-                id="scrape-name"
-                type="text"
-                className="text-field"
-                placeholder="e.g. Subway Alamesra"
-                value={restaurantName}
-                onChange={(e) => setRestaurantName(e.target.value)}
-                disabled={isLoading}
-              />
-            </div>
-
-            <div className="form-group options-group">
-              <label className="form-label">
-                <Globe size={16} />
-                <span>Browser Rendering</span>
-              </label>
-              <label className="checkbox-card" title="Use Playwright Chromium to execute client-side JavaScript">
-                <input
-                  type="checkbox"
-                  checked={renderBrowser}
-                  onChange={(e) => setRenderBrowser(e.target.checked)}
-                  disabled={isLoading}
-                />
-                <div className="checkbox-text">
-                  <span className="checkbox-title">Dynamic JS Rendering (--render)</span>
-                  <span className="checkbox-desc">Headless Chromium for JS-heavy web pages</span>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          {/* Collapsible Advanced Parameters & Location Input */}
-          <div className="advanced-toggle-section">
-            <button
-              type="button"
-              className="btn-toggle-advanced"
-              onClick={() => setShowAdvancedParams(!showAdvancedParams)}
-            >
-              <Sliders size={15} />
-              <span>Custom Restaurant Parameters & Location (Optional Override)</span>
-              {showAdvancedParams ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-            </button>
-
-            {showAdvancedParams && (
-              <div className="advanced-params-panel">
-                <div className="params-row-3">
-                  <div className="param-field">
-                    <label>
-                      <Star size={13} className="text-amber" /> Rating (1.0 - 5.0)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="1.0"
-                      max="5.0"
-                      placeholder="e.g. 4.6"
-                      value={rating}
-                      onChange={(e) => setRating(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="param-field">
-                    <label>
-                      <Tag size={13} /> Cuisine Tags
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Fast Food, Sandwich, Halal"
-                      value={cuisine}
-                      onChange={(e) => setCuisine(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="param-field">
-                    <label>
-                      <Clock size={13} /> Open Hours
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. 08:00 - 22:00"
-                      value={openingHours}
-                      onChange={(e) => setOpeningHours(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="location-inputs-row">
-                  <div className="param-field flex-2">
-                    <label>
-                      <MapPin size={13} className="text-blue" /> Physical Address
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Ground Floor, 1Borneo Hypermall, Jalan Sulaman"
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="param-field">
-                    <label>Latitude</label>
-                    <input
-                      type="number"
-                      step="0.000001"
-                      placeholder="e.g. 6.036082"
-                      value={lat}
-                      onChange={(e) => setLat(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="param-field">
-                    <label>Longitude</label>
-                    <input
-                      type="number"
-                      step="0.000001"
-                      placeholder="e.g. 116.130047"
-                      value={lon}
-                      onChange={(e) => setLon(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="quick-pins-bar">
-                  <span className="quick-pin-label">Quick Location Presets:</span>
-                  <button
-                    type="button"
-                    className="btn-quick-pin"
-                    onClick={() => handleQuickPin('1borneo')}
-                  >
-                    📍 Pin to 1Borneo Hypermall (6.0361, 116.1300)
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-quick-pin"
-                    onClick={() => handleQuickPin('alamesra')}
-                  >
-                    📍 Pin to Alamesra Plaza (6.0285, 116.1261)
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {error && (
-            <div className="alert-error">
-              <AlertCircle size={18} />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <div className="action-row">
             <button
               type="submit"
-              className={`btn-scrape-primary ${isLoading ? 'loading' : ''}`}
+              className="btn-primary"
               disabled={isLoading || !url.trim()}
             >
               {isLoading ? (
                 <>
-                  <Loader2 size={19} className="spin-icon" />
-                  <span>Harvesting Menu & Location...</span>
+                  <Loader2 size={15} className="is-spinning" />
+                  <span>Harvesting...</span>
                 </>
               ) : (
                 <>
-                  <Play size={19} fill="currentColor" />
-                  <span>Start Scraping Menu</span>
+                  <Play size={14} fill="currentColor" />
+                  <span>Scrape</span>
                 </>
               )}
             </button>
-
-            <span className="responsible-note">
-              🛡️ Multi-parameter deduplication active (Matches by URL, ID, Normalized Name, and GPS &le;120m).
-            </span>
           </div>
-        </form>
-      </div>
 
-      {/* Scrape Result Highlights (Shown if scrape succeeded) */}
-      {result && result.success && (
-        <div className="result-card">
-          <div className="result-header">
-            <div className="result-title-group">
-              <CheckCircle2 size={24} className="icon-success" />
-              <div>
-                <div className="result-title-row">
-                  <h3>Extraction Completed: {result.restaurantName}</h3>
-                  {result.isMerged ? (
-                    <span className="badge-merged">
-                      <ShieldCheck size={13} />
-                      Deduplicated &amp; Merged with Existing Venue (ID #{result.restaurantId})
-                    </span>
-                  ) : (
-                    <span className="badge-new">New Restaurant Added</span>
-                  )}
-                </div>
-                <p>
-                  Platform: <strong>{result.source}</strong> • Harvested{' '}
-                  <strong>{result.itemsCount}</strong> menu dishes in{' '}
-                  <strong>{((result.elapsedMs || 0) / 1000).toFixed(1)}s</strong>
-                </p>
-              </div>
+          {/* Quick Presets & Options Toggle */}
+          <div className="command-footer">
+            <div className="presets-list">
+              <span className="presets-caption">Presets:</span>
+              {PRESETS.map((p) => (
+                <button
+                  key={p.name}
+                  type="button"
+                  className="preset-chip"
+                  onClick={() => handleApplyPreset(p)}
+                >
+                  {p.name.replace(' - Alamesra', '')}
+                </button>
+              ))}
             </div>
 
             <button
-              className="btn-view-analytics"
-              onClick={() => onNavigateToData(result.restaurantId)}
+              type="button"
+              className={`btn-ghost-toggle ${showOptions ? 'active' : ''}`}
+              onClick={() => setShowOptions(!showOptions)}
             >
-              <Layers size={16} />
-              <span>Explore in Analytics Dashboard</span>
+              <Sliders size={13} />
+              <span>Options</span>
+              {showOptions ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
             </button>
           </div>
 
-          {/* Restaurant Parameter Badges */}
-          <div className="result-params-row">
-            {result.rating && (
-              <span className="meta-badge rating">
-                <Star size={12} fill="currentColor" />
-                Rating: {result.rating} / 5.0
-              </span>
-            )}
-            {result.cuisine && (
-              <span className="meta-badge cuisine">
-                <Tag size={12} />
-                {result.cuisine}
-              </span>
-            )}
-            {result.openingHours && (
-              <span className="meta-badge hours">
-                <Clock size={12} />
-                {result.openingHours}
-              </span>
-            )}
-            {(result.address || result.lat || result.area) && (
-              <a
-                href={getGoogleMapsUrl({
-                  lat: result.lat,
-                  lon: result.lon,
-                  address: result.address,
-                  name: result.restaurantName,
-                  area: result.area,
-                })}
-                target="_blank"
-                rel="noreferrer"
-                className="meta-badge location location-link"
-                title="Open location on Google Maps"
-              >
-                <MapPin size={12} />
-                <span>{result.address || (result.lat && result.lon ? `${result.lat}, ${result.lon}` : result.area || 'Location')}</span>
-                <ExternalLink size={10} className="link-ext-icon" />
-              </a>
-            )}
-          </div>
+          {/* Collapsible Options Drawer */}
+          {showOptions && (
+            <div className="options-drawer">
+              <div className="drawer-grid">
+                <div className="form-item">
+                  <label>Venue Name Override</label>
+                  <input
+                    type="text"
+                    placeholder="Auto-detected if blank"
+                    value={restaurantName}
+                    onChange={(e) => setRestaurantName(e.target.value)}
+                    disabled={isLoading}
+                  />
+                </div>
 
-          {result.items && result.items.length > 0 && (
-            <div className="result-items-preview">
-              <h4>Sample Parsed Dishes ({Math.min(result.items.length, 6)} of {result.items.length})</h4>
-              <div className="preview-grid">
-                {result.items.slice(0, 6).map((item, idx) => (
-                  <div key={idx} className="preview-dish-card">
-                    <div className="dish-top">
-                      <span className="dish-category">{item.category || 'General'}</span>
-                      <span className="dish-price">RM {item.price.toFixed(2)}</span>
-                    </div>
-                    <strong className="dish-name">{item.name}</strong>
-                    {item.description && (
-                      <p className="dish-desc">{item.description}</p>
-                    )}
-                  </div>
-                ))}
+                <div className="form-item">
+                  <label>Rating (1.0 - 5.0)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="1.0"
+                    max="5.0"
+                    placeholder="e.g. 4.6"
+                    value={rating}
+                    onChange={(e) => setRating(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-item">
+                  <label>Cuisine Category</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Fast Food, Halal"
+                    value={cuisine}
+                    onChange={(e) => setCuisine(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-item">
+                  <label>Operating Hours</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 10:00 - 22:00"
+                    value={openingHours}
+                    onChange={(e) => setOpeningHours(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-item span-2">
+                  <label>Street Address</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Ground Floor, 1Borneo Hypermall"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-item">
+                  <label>Latitude</label>
+                  <input
+                    type="number"
+                    step="0.000001"
+                    placeholder="e.g. 6.036082"
+                    value={lat}
+                    onChange={(e) => setLat(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-item">
+                  <label>Longitude</label>
+                  <input
+                    type="number"
+                    step="0.000001"
+                    placeholder="e.g. 116.130047"
+                    value={lon}
+                    onChange={(e) => setLon(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="drawer-actions">
+                <label className="checkbox-compact">
+                  <input
+                    type="checkbox"
+                    checked={renderBrowser}
+                    onChange={(e) => setRenderBrowser(e.target.checked)}
+                    disabled={isLoading}
+                  />
+                  <span>Render JavaScript with Headless Chromium</span>
+                </label>
+
+                <div className="pin-presets">
+                  <button
+                    type="button"
+                    className="btn-tiny"
+                    onClick={() => handleQuickPin('1borneo')}
+                  >
+                    Pin 1Borneo
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-tiny"
+                    onClick={() => handleQuickPin('alamesra')}
+                  >
+                    Pin Alamesra
+                  </button>
+                </div>
               </div>
             </div>
           )}
+
+          {error && (
+            <div className="alert-box error">
+              <AlertCircle size={15} />
+              <span>{error}</span>
+            </div>
+          )}
+        </form>
+      </div>
+
+      {/* Result Notification Card */}
+      {result && result.success && (
+        <div className="result-banner">
+          <div className="result-banner-left">
+            <CheckCircle2 size={18} className="text-success" />
+            <div className="result-summary">
+              <div className="result-headline">
+                <strong>{result.restaurantName}</strong>
+                <span className="dot-sep">·</span>
+                <span>{result.itemsCount} dishes harvested</span>
+                <span className="dot-sep">·</span>
+                <span className="text-muted">{((result.elapsedMs || 0) / 1000).toFixed(1)}s</span>
+                {result.isMerged && (
+                  <span className="merged-tag">Deduplicated</span>
+                )}
+              </div>
+              <div className="result-meta-inline">
+                {result.rating && <span>★ {result.rating}</span>}
+                {result.cuisine && <span>{result.cuisine}</span>}
+                {result.area && <span>📍 {result.area}</span>}
+              </div>
+            </div>
+          </div>
+
+          <div className="result-banner-actions">
+            {result.items && result.items.length > 0 && (
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => setShowDishesPreview(!showDishesPreview)}
+              >
+                {showDishesPreview ? 'Hide Dishes' : `Preview (${Math.min(result.items.length, 6)})`}
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => onNavigateToData(result.restaurantId)}
+            >
+              <span>View in Analytics</span>
+              <ArrowRight size={13} />
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Live Terminal & Logs */}
-      <div className="terminal-card">
-        <div className="terminal-header">
-          <div className="terminal-title">
-            <TerminalIcon size={16} />
-            <span>Execution Terminal & Network Log</span>
+      {/* Expandable Preview Dishes Grid */}
+      {result && showDishesPreview && result.items && (
+        <div className="preview-container">
+          <div className="preview-items-grid">
+            {result.items.slice(0, 6).map((item, idx) => (
+              <div key={idx} className="preview-mini-card">
+                <div className="mini-card-head">
+                  <span className="mini-category">{item.category || 'General'}</span>
+                  <span className="mini-price">RM {item.price.toFixed(2)}</span>
+                </div>
+                <div className="mini-name">{item.name}</div>
+              </div>
+            ))}
           </div>
-          <span className="terminal-status">
-            {isLoading ? 'Active Process' : 'Standby'}
-          </span>
         </div>
+      )}
 
-        <div className="terminal-body">
-          {logs.map((log) => (
-            <div key={log.id} className={`log-line log-${log.type}`}>
-              <span className="log-time">[{log.time}]</span>
-              <span className="log-content">{log.text}</span>
-            </div>
-          ))}
-          {isLoading && (
-            <div className="log-line log-loading">
-              <span className="log-time">[{new Date().toLocaleTimeString()}]</span>
-              <span className="log-content">
-                <Loader2 size={13} className="spin-inline" /> Fetching and analyzing DOM/JSON payload streams...
-              </span>
-            </div>
-          )}
-        </div>
+      {/* Compact / Collapsible Status & Logs Drawer */}
+      <div className="terminal-strip">
+        <button
+          type="button"
+          className="terminal-strip-toggle"
+          onClick={() => setShowLogs(!showLogs)}
+        >
+          <div className="strip-left">
+            <TerminalIcon size={14} />
+            <span>Console Stream</span>
+            <span className={`status-indicator ${isLoading ? 'active' : ''}`}>
+              {isLoading ? 'Processing' : 'Standby'}
+            </span>
+          </div>
+          <div className="strip-right">
+            <span>{logs.length} events</span>
+            {showLogs ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          </div>
+        </button>
+
+        {showLogs && (
+          <div className="terminal-console">
+            {logs.map((log) => (
+              <div key={log.id} className={`console-line ${log.type}`}>
+                <span className="console-time">{log.time}</span>
+                <span className="console-msg">{log.text}</span>
+              </div>
+            ))}
+            {isLoading && (
+              <div className="console-line info">
+                <span className="console-time">{new Date().toLocaleTimeString()}</span>
+                <span className="console-msg is-loading">
+                  <Loader2 size={11} className="is-spinning" /> Sniffing network payloads...
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Discovered Restaurants in Area (1Borneo / Alamesra) */}
-      <div className="discovered-section">
-        <div className="section-header">
-          <div className="section-title-group">
-            <Compass size={20} />
-            <div>
-              <h3>Discovered Local Establishments (1Borneo Hypermall &amp; Alamesra)</h3>
-              <p>
-                Geolocated food establishments. You can attach delivery links, update ratings, or
-                pin coordinates to enrich your dataset.
-              </p>
-            </div>
+      {/* Discovered Establishments (Minimalist Table) */}
+      <div className="table-card">
+        <div className="table-header-row">
+          <div>
+            <h3 className="table-title">Tracked Establishments</h3>
+            <span className="table-sub">{filteredRestaurants.length} venues in 1Borneo & Alamesra</span>
+          </div>
+
+          <div className="table-search-wrap">
+            <Search size={14} className="search-icon" />
+            <input
+              type="text"
+              placeholder="Filter venues..."
+              value={tableSearch}
+              onChange={(e) => setTableSearch(e.target.value)}
+              className="table-search-input"
+            />
           </div>
         </div>
 
-        <div className="discovered-table-container">
-          <table className="discovered-table">
+        <div className="table-responsive">
+          <table className="clean-table">
             <thead>
               <tr>
-                <th>Restaurant Name</th>
-                <th>Rating &amp; Cuisine</th>
-                <th>Location / Address</th>
-                <th>Scrape Status</th>
-                <th>Available Links</th>
-                <th>Action</th>
+                <th>Venue</th>
+                <th>Location</th>
+                <th>Rating</th>
+                <th>Menu Status</th>
+                <th>Source</th>
+                <th className="align-right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {restaurants.map((rest) => (
-                <tr key={rest.id} className={rest.item_count > 0 ? 'row-scraped' : ''}>
+              {filteredRestaurants.map((rest) => (
+                <tr key={rest.id}>
+                  {/* Venue Name & Cuisine */}
                   <td>
-                    <div className="restaurant-cell-name">
-                      <strong>{rest.name}</strong>
-                      {rest.avg_price && (
-                        <span className="cell-subtext">Avg: RM {rest.avg_price.toFixed(2)}</span>
-                      )}
+                    <div className="venue-cell">
+                      <span className="venue-name">{rest.name}</span>
+                      <span className="venue-sub">
+                        {rest.cuisine || 'General Dining'}
+                        {rest.avg_price ? ` · avg RM ${rest.avg_price.toFixed(2)}` : ''}
+                      </span>
                     </div>
                   </td>
-                  <td>
-                    <div className="rating-cuisine-cell">
-                      {rest.rating ? (
-                        <span className="rating-pill">
-                          <Star size={11} fill="currentColor" /> {rest.rating}
-                        </span>
-                      ) : (
-                        <span className="no-rating-pill">Unrated</span>
-                      )}
-                      <span className="cuisine-pill">{rest.cuisine || 'Food & Dining'}</span>
-                      {rest.opening_hours && (
-                        <span className="hours-pill" title={rest.opening_hours}>
-                          🕒 {rest.opening_hours}
-                        </span>
-                      )}
-                    </div>
-                  </td>
+
+                  {/* Location & Map Link */}
                   <td>
                     <div className="location-cell">
                       <a
@@ -720,145 +634,129 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
                         })}
                         target="_blank"
                         rel="noreferrer"
-                        className="area-pill area-link"
-                        title={`Open ${rest.name} on Google Maps`}
+                        className="map-link-chip"
+                        title={rest.address || 'Open in Google Maps'}
                       >
                         <MapPin size={11} />
-                        <span>{rest.area || '1Borneo / Alamesra'}</span>
-                        <ExternalLink size={9} className="link-ext-icon" />
+                        <span>{rest.area || '1Borneo/Alamesra'}</span>
+                        <ExternalLink size={10} className="icon-ext" />
                       </a>
-
-                      {rest.lat && rest.lon ? (
-                        <a
-                          href={`https://www.google.com/maps/search/?api=1&query=${rest.lat},${rest.lon}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="coords-pill coords-link"
-                          title={`Pin GPS in Google Maps: ${rest.lat}, ${rest.lon}`}
-                        >
-                          📍 {rest.lat.toFixed(4)}, {rest.lon.toFixed(4)}
-                          <ExternalLink size={9} className="link-ext-icon" />
-                        </a>
-                      ) : (
-                        <span className="no-coords-pill">No GPS coordinates</span>
-                      )}
-
-                      {rest.address && (
-                        <a
-                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                            rest.address.toLowerCase().includes('kinabalu')
-                              ? rest.address
-                              : `${rest.address}, Kota Kinabalu`
-                          )}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="address-text address-link"
-                          title={`Search address on Google Maps: ${rest.address}`}
-                        >
-                          <span>{rest.address}</span>
-                          <ExternalLink size={9} className="link-ext-icon" />
-                        </a>
-                      )}
                     </div>
                   </td>
+
+                  {/* Rating */}
+                  <td>
+                    {rest.rating ? (
+                      <span className="rating-text">
+                        ★ {rest.rating}
+                      </span>
+                    ) : (
+                      <span className="text-dim">—</span>
+                    )}
+                  </td>
+
+                  {/* Menu Status */}
                   <td>
                     {rest.item_count > 0 ? (
-                      <span className="status-badge status-ok">
-                        <CheckCircle2 size={13} />
+                      <span className="badge-status-ready">
                         {rest.item_count} items
                       </span>
                     ) : (
-                      <span className="status-badge status-pending">
-                        <Clock size={13} />
+                      <span className="badge-status-empty">
                         Unscraped
                       </span>
                     )}
                   </td>
+
+                  {/* Source Links */}
                   <td>
-                    <div className="links-cell">
-                      {rest.grab_url && (
+                    <div className="sources-cell">
+                      {rest.grab_url ? (
                         <a
                           href={rest.grab_url}
                           target="_blank"
                           rel="noreferrer"
-                          className="link-chip grab"
-                          title="Open GrabFood"
+                          className="source-link"
                         >
-                          GrabFood <ExternalLink size={11} />
+                          GrabFood <ExternalLink size={10} />
                         </a>
-                      )}
-                      {rest.website && (
+                      ) : rest.website ? (
                         <a
                           href={rest.website}
                           target="_blank"
                           rel="noreferrer"
-                          className="link-chip web"
-                          title="Open Website"
+                          className="source-link"
                         >
-                          Website <ExternalLink size={11} />
+                          Web <ExternalLink size={10} />
                         </a>
-                      )}
-                      {!rest.grab_url && !rest.website && (
-                        <span className="no-link-text">No URL attached</span>
+                      ) : (
+                        <span className="text-dim">—</span>
                       )}
                     </div>
                   </td>
-                  <td>
-                    <div className="actions-cell">
+
+                  {/* Actions */}
+                  <td className="align-right">
+                    <div className="action-button-group">
+                      {/* Scrape button if url available */}
                       {rest.grab_url ? (
                         <button
                           type="button"
-                          className="btn-action-small btn-load"
+                          className="btn-cell-action"
                           onClick={() => {
                             setUrl(rest.grab_url!);
                             setRestaurantName(rest.name);
                             setRenderBrowser(false);
-                            window.scrollTo({ top: 120, behavior: 'smooth' });
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
                           }}
+                          title="Load URL and scrape"
                         >
                           Scrape
                         </button>
                       ) : rest.website ? (
                         <button
                           type="button"
-                          className="btn-action-small btn-load"
+                          className="btn-cell-action"
                           onClick={() => {
                             setUrl(rest.website!);
                             setRestaurantName(rest.name);
                             setRenderBrowser(true);
-                            window.scrollTo({ top: 120, behavior: 'smooth' });
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
                           }}
+                          title="Load URL and scrape"
                         >
                           Scrape
                         </button>
                       ) : (
                         <button
                           type="button"
-                          className="btn-action-small btn-add-link"
+                          className="btn-cell-action highlight"
                           onClick={() => handleOpenEditModal(rest)}
+                          title="Attach delivery URL"
                         >
-                          <PlusCircle size={13} />
-                          Attach
+                          <Plus size={12} /> Attach
                         </button>
                       )}
 
+                      {/* Edit metadata */}
                       <button
                         type="button"
-                        className="btn-action-small btn-edit-meta"
+                        className="btn-cell-icon"
                         onClick={() => handleOpenEditModal(rest)}
-                        title="Edit location, rating & metadata"
+                        title="Edit metadata & GPS"
                       >
-                        <Edit3 size={12} />
+                        <Edit2 size={12} />
                       </button>
 
+                      {/* View dishes in analytics */}
                       {rest.item_count > 0 && (
                         <button
                           type="button"
-                          className="btn-action-small btn-view"
+                          className="btn-cell-action secondary"
                           onClick={() => onNavigateToData(rest.id)}
-                          title="View dishes in Analytics"
+                          title="Explore dishes"
                         >
-                          View ({rest.item_count})
+                          View
                         </button>
                       )}
                     </div>
@@ -873,77 +771,65 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
       {/* Edit Location & Metadata Modal */}
       {editRestaurant && (
         <div className="modal-backdrop" onClick={() => setEditRestaurant(null)}>
-          <div className="modal-card modal-large" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <div className="modal-header-title">
-                <MapPin size={18} className="text-blue" />
-                <h3>Attach Location &amp; Metadata: {editRestaurant.name}</h3>
-              </div>
+              <h3>Edit Venue: {editRestaurant.name}</h3>
               <button
-                className="modal-close"
+                className="btn-close"
                 onClick={() => setEditRestaurant(null)}
               >
                 ✕
               </button>
             </div>
-            <div className="modal-body">
-              <p>
-                Update the physical location coordinates, street address, rating, cuisine tags, and
-                delivery store link for this restaurant.
-              </p>
 
-              <div className="modal-form-grid">
-                <div className="form-group full-span">
-                  <label>Store URL (GrabFood, Foodpanda, or Website)</label>
+            <div className="modal-body">
+              <div className="modal-grid">
+                <div className="form-item span-2">
+                  <label>Store URL (GrabFood, Foodpanda, Website)</label>
                   <input
                     type="url"
-                    className="modal-input"
-                    placeholder="https://food.grab.com/my/en/restaurant/... or https://..."
+                    placeholder="https://..."
                     value={modalUrl}
                     onChange={(e) => setModalUrl(e.target.value)}
                   />
                 </div>
 
-                <div className="form-group">
+                <div className="form-item">
                   <label>Rating (1.0 - 5.0)</label>
                   <input
                     type="number"
                     step="0.1"
                     min="1.0"
                     max="5.0"
-                    className="modal-input"
-                    placeholder="e.g. 4.6"
+                    placeholder="4.6"
                     value={modalRating}
                     onChange={(e) => setModalRating(e.target.value)}
                   />
                 </div>
 
-                <div className="form-group">
-                  <label>Cuisine Tags</label>
+                <div className="form-item">
+                  <label>Cuisine Category</label>
                   <input
                     type="text"
-                    className="modal-input"
-                    placeholder="e.g. Fast Food, Sandwich, Beverages"
+                    placeholder="e.g. Fast Food"
                     value={modalCuisine}
                     onChange={(e) => setModalCuisine(e.target.value)}
                   />
                 </div>
 
-                <div className="form-group">
+                <div className="form-item">
                   <label>Operating Hours</label>
                   <input
                     type="text"
-                    className="modal-input"
                     placeholder="e.g. 10:00 - 22:00"
                     value={modalHours}
                     onChange={(e) => setModalHours(e.target.value)}
                   />
                 </div>
 
-                <div className="form-group">
-                  <label>Area / District</label>
+                <div className="form-item">
+                  <label>Area</label>
                   <select
-                    className="modal-input"
                     value={modalArea}
                     onChange={(e) => setModalArea(e.target.value)}
                   >
@@ -953,86 +839,86 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
                   </select>
                 </div>
 
-                <div className="form-group full-span">
+                <div className="form-item span-2">
                   <label>Street Address</label>
                   <input
                     type="text"
-                    className="modal-input"
-                    placeholder="e.g. Lot C-118, Concourse Floor, 1Borneo Hypermall"
+                    placeholder="Lot number, floor, building"
                     value={modalAddress}
                     onChange={(e) => setModalAddress(e.target.value)}
                   />
                 </div>
 
-                <div className="form-group">
+                <div className="form-item">
                   <label>Latitude</label>
                   <input
                     type="number"
                     step="0.000001"
-                    className="modal-input"
-                    placeholder="e.g. 6.036082"
+                    placeholder="6.036082"
                     value={modalLat}
                     onChange={(e) => setModalLat(e.target.value)}
                   />
                 </div>
 
-                <div className="form-group">
+                <div className="form-item">
                   <label>Longitude</label>
                   <input
                     type="number"
                     step="0.000001"
-                    className="modal-input"
-                    placeholder="e.g. 116.130047"
+                    placeholder="116.130047"
                     value={modalLon}
                     onChange={(e) => setModalLon(e.target.value)}
                   />
                 </div>
               </div>
 
-              <div className="quick-pins-bar modal-pins">
-                <span className="quick-pin-label">Set Preset GPS:</span>
+              <div className="modal-preset-pins">
+                <span className="text-dim">Preset Coordinates:</span>
                 <button
                   type="button"
-                  className="btn-quick-pin"
+                  className="btn-tiny"
                   onClick={() => {
                     setModalLat('6.036082');
                     setModalLon('116.130047');
                     setModalArea('1borneo');
                   }}
                 >
-                  📍 1Borneo Coordinates
+                  1Borneo
                 </button>
                 <button
                   type="button"
-                  className="btn-quick-pin"
+                  className="btn-tiny"
                   onClick={() => {
                     setModalLat('6.028450');
                     setModalLon('116.126120');
                     setModalArea('alamesra');
                   }}
                 >
-                  📍 Alamesra Coordinates
+                  Alamesra
                 </button>
               </div>
             </div>
+
             <div className="modal-footer">
               <button
-                className="btn-modal-cancel"
+                type="button"
+                className="btn-ghost"
                 onClick={() => setEditRestaurant(null)}
               >
                 Cancel
               </button>
               <button
-                className="btn-modal-save"
+                type="button"
+                className="btn-primary"
                 onClick={handleSaveModal}
                 disabled={modalSuccess}
               >
                 {modalSuccess ? (
                   <>
-                    <Check size={16} /> Saved Changes!
+                    <Check size={14} /> Saved!
                   </>
                 ) : (
-                  'Save & Attach'
+                  'Save'
                 )}
               </button>
             </div>
