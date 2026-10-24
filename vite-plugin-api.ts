@@ -402,7 +402,7 @@ export function apiPlugin(): Plugin {
 
             const child = spawn(pythonPath, args, {
               cwd: scraperDir,
-              env: { ...process.env, PYTHONUNBUFFERED: '1' },
+              env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONPATH: 'scraper' },
             });
 
             child.stdout.on('data', (data) => {

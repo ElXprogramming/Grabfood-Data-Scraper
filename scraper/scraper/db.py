@@ -129,9 +129,7 @@ def _find_match(conn, rec: dict) -> sqlite3.Row | None:
                 dist = haversine_m(rec["lat"], rec["lon"], row["lat"], row["lon"])
                 m = _norm(row["name"])
                 ratio = SequenceMatcher(None, n, m).ratio()
-                if dist <= 120 and (n in m or m in n or ratio >= 0.65):
-                    return row
-                if dist <= 30 and ratio >= 0.40:
+                if dist <= 150 and (n in m or m in n or ratio >= 0.72):
                     return row
 
     # 5. Same Area + high fuzzy name similarity or containment
@@ -178,7 +176,7 @@ def upsert_restaurant(conn, rec: dict) -> int:
         if new_val not in (None, ""):
             if row[f] in (None, ""):
                 updates[f] = new_val
-            elif f in ("rating", "cuisine", "opening_hours", "address", "lat", "lon", "area") and new_val != row[f]:
+            elif f in ("rating", "cuisine", "opening_hours", "address", "lat", "lon", "area", "grab_url", "foodpanda_url", "website") and new_val != row[f]:
                 updates[f] = new_val
 
     if updates:

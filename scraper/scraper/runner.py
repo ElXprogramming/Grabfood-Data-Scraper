@@ -4,15 +4,16 @@ and outputs structured JSON to stdout for backend orchestration.
 """
 import argparse
 import json
+import logging
 import re
-import sys
-from pathlib import Path
 from urllib.parse import urlparse
 
 from . import config, db
 from .extract_delivery import scrape_delivery
 from .extract_website import scrape_website
 from .http_client import PoliteClient
+
+logger = logging.getLogger("scraper.runner")
 
 
 def _guess_restaurant_name(url: str) -> str:
@@ -35,6 +36,7 @@ def _guess_restaurant_name(url: str) -> str:
             parts = path.split("/")
             if parts:
                 slug = parts[-1]
+                slug = re.sub(r"-[a-z0-9]{3,6}$", "", slug, flags=re.I)
                 words = [w.capitalize() for w in slug.split("-") if w]
                 return " ".join(words)
         # Generic domain name
@@ -180,8 +182,8 @@ def cmd_scrape(
                 db.log(conn, rid, source_label, "ok", f"{len(sanitized_items)} items")
             else:
                 db.log(conn, rid, source_label, "empty", "no items found")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("SQLite storage failed: %s", e)
 
         # Automatic Firestore Cloud Sync
         try:
@@ -189,8 +191,8 @@ def cmd_scrape(
             doc_id = sync_restaurant_to_firestore(restaurant_record, restaurant_id=rid)
             if doc_id and sanitized_items:
                 sync_menu_items_to_firestore(doc_id, final_name, sanitized_items, source=source_label)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Firestore sync skipped: %s", e)
 
     return {
         "success": True,

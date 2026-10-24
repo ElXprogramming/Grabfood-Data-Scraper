@@ -13,25 +13,30 @@ def capture(url: str, wait_ms: int = 4000):
     payloads = []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        ctx = browser.new_context(user_agent=config.USER_AGENT, locale="en-MY",
-                                  geolocation={"latitude": 6.0360, "longitude": 116.1297},
-                                  permissions=["geolocation"])
-        page = ctx.new_page()
+        try:
+            ctx = browser.new_context(
+                user_agent=config.USER_AGENT,
+                locale="en-MY",
+                geolocation={"latitude": 6.0360, "longitude": 116.1297},
+                permissions=["geolocation"],
+            )
+            page = ctx.new_page()
 
-        def on_response(resp):
+            def on_response(resp):
+                try:
+                    if "json" in (resp.headers.get("content-type") or "") and resp.status == 200:
+                        payloads.append(resp.json())
+                except Exception:
+                    pass
+
+            page.on("response", on_response)
+            page.goto(url, wait_until="domcontentloaded", timeout=45000)
             try:
-                if "json" in (resp.headers.get("content-type") or "") and resp.status == 200:
-                    payloads.append(resp.json())
+                page.wait_for_load_state("networkidle", timeout=12000)
             except Exception:
                 pass
-
-        page.on("response", on_response)
-        page.goto(url, wait_until="domcontentloaded", timeout=45000)
-        try:
-            page.wait_for_load_state("networkidle", timeout=15000)
-        except Exception:
-            pass
-        page.wait_for_timeout(wait_ms)
-        html = page.content()
-        browser.close()
+            page.wait_for_timeout(wait_ms)
+            html = page.content()
+        finally:
+            browser.close()
     return html, payloads

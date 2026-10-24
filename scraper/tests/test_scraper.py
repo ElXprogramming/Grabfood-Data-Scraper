@@ -120,3 +120,149 @@ def test_delivery_metadata_extraction():
     assert meta["lat"] == 6.0361
     assert meta["lon"] == 116.1301
 
+
+def test_foodpanda_payload_and_variations():
+    payload = {
+        "data": {
+            "restaurantDetailsPage": {
+                "vendorData": {
+                    "name": "Maimunah Food Corner (Alamesra)",
+                    "vendorRating": {"value": 5.0, "count": 120},
+                    "characteristics": {"cuisines": [{"name": "Malaysian"}, {"name": "Roti Canai"}]},
+                    "location": {
+                        "addressLine1": "Lot 30, Lorong Plaza Utama 3, Alamesra",
+                        "latitude": 6.033558,
+                        "longitude": 116.127149,
+                        "city": {"name": "Kota Kinabalu"},
+                        "postcode": "88450"
+                    },
+                    "schedules": {
+                        "weekly": {
+                            "monday": {
+                                "delivery": [{"timeOfDayRange": {"from": "07:00", "to": "24:00"}}]
+                            }
+                        }
+                    },
+                    "menu": {
+                        "categories": [
+                            {
+                                "title": "Roti",
+                                "products": [
+                                    {
+                                        "title": "Roti Canai",
+                                        "description": "Crispy flatbread",
+                                        "variations": [
+                                            {"price": 1.80, "discountedPrice": None}
+                                        ]
+                                    },
+                                    {
+                                        "title": "Roti Telur",
+                                        "description": "Flatbread with egg",
+                                        "variations": [
+                                            {"price": 2.80, "discountedPrice": 2.50}
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    }
+    items = extract_from_payloads([payload])
+    assert len(items) == 2
+    assert items[0] == {
+        "category": "Roti",
+        "name": "Roti Canai",
+        "description": "Crispy flatbread",
+        "price": 1.80,
+        "currency": "MYR"
+    }
+    # discounted price prioritized
+    assert items[1] == {
+        "category": "Roti",
+        "name": "Roti Telur",
+        "description": "Flatbread with egg",
+        "price": 2.50,
+        "currency": "MYR"
+    }
+
+    from scraper.extract_delivery import extract_metadata_from_payloads
+    meta = extract_metadata_from_payloads([payload])
+    assert meta["name"] == "Maimunah Food Corner (Alamesra)"
+    assert meta["rating"] == 5.0
+    assert "Malaysian" in meta["cuisine"]
+    assert "Alamesra" in meta["address"]
+    assert meta["lat"] == 6.033558
+    assert meta["lon"] == 116.127149
+    assert meta["opening_hours"] == "07:00 - 24:00"
+
+
+def test_delivery_jsonld_metadata():
+    from scraper.extract_delivery import extract_metadata_from_payloads
+    html = """
+    <html>
+    <head>
+    <script type="application/ld+json">
+    {
+      "@context": "http://schema.org",
+      "@type": "Restaurant",
+      "name": "Maimunah Food Corner (Alamesra)",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "Lot 30, Alamesra",
+        "addressLocality": "Kota Kinabalu",
+        "postalCode": "88450"
+      },
+      "geo": {
+        "@type": "GeoCoordinates",
+        "latitude": 6.033558,
+        "longitude": 116.127149
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": 5.0
+      },
+      "openingHoursSpecification": [
+        {
+          "@type": "OpeningHoursSpecification",
+          "opens": "07:00",
+          "closes": "24:00"
+        }
+      ],
+      "servesCuisine": ["Malaysian", "Roti Canai"]
+    }
+    </script>
+    </head>
+    <body></body>
+    </html>
+    """
+    meta = extract_metadata_from_payloads([], html=html)
+    assert meta["name"] == "Maimunah Food Corner (Alamesra)"
+    assert meta["rating"] == 5.0
+    assert "Malaysian" in meta["cuisine"]
+    assert "Kota Kinabalu" in meta["address"]
+    assert meta["lat"] == 6.033558
+    assert meta["lon"] == 116.127149
+    assert meta["opening_hours"] == "07:00 - 24:00"
+
+
+def test_runner_helpers():
+    from scraper.runner import _guess_restaurant_name, _infer_area
+    assert _guess_restaurant_name("https://food.grab.com/my/en/restaurant/subway-alamesra-delivery/1-123") == "Subway Alamesra"
+    assert _guess_restaurant_name("https://www.foodpanda.my/restaurant/r4hh/maimunah-food-corner-alamesra-r4hh") == "Maimunah Food Corner Alamesra"
+    assert _infer_area("https://food.grab.com", "Lorong Plaza Utama, Alamesra") == "alamesra"
+    assert _infer_area("https://food.grab.com", "Concourse Level, 1Borneo Hypermall") == "1borneo"
+
+
+def test_to_price_variations_and_formats():
+    from scraper.extract_delivery import _to_price
+    assert _to_price({"priceInMinorUnit": 1250}) == 12.5
+    assert _to_price({"price": "RM 9.90"}) == 9.9
+    assert _to_price({"discountedPrice": 7.50, "price": 10.0}) == 7.5
+    assert _to_price({"variations": [{"price": 4.50}]}) == 4.5
+    assert _to_price({"options": [{"price": 15.00}]}) == 15.0
+
+
+

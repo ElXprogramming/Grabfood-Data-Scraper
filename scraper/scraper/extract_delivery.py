@@ -1,64 +1,170 @@
-"""Stage 2b - EXPERIMENTAL extractor for delivery-platform pages (GrabFood, foodpanda).
+"""Stage 2b - Extractor for delivery-platform pages (GrabFood, Foodpanda).
 
-These apps load menus through background JSON calls. We open a restaurant page you supply in a
-headless browser, capture those JSON responses, and walk them looking for objects that look like
-menu items (a name plus a price). No private API is called directly and no bot protection is bypassed.
-If a platform blocks the page, this returns nothing - that is expected.
-
-Check each platform's Terms of Service before using this data, and cite it in your FYP report.
+These apps load menus through background JSON calls. We open a restaurant page in a
+headless browser, capture network JSON responses, and walk them to extract structured
+menu items (category, name, price, description) and restaurant metadata.
 """
+from __future__ import annotations
+
+import json
+import re
+from typing import Any, Dict, List, Optional, Tuple
+
 from .browser import capture
 
-NAME_KEYS = ("name", "title", "itemName", "item_name")
-DESC_KEYS = ("description", "desc")
-PRICE_KEYS = (("priceInMinorUnit", 100), ("price_in_minor_unit", 100), ("price", 1),
-              ("displayPrice", 1), ("unitPrice", 1), ("unit_price", 1))
-CHILD_KEYS = ("items", "dishes", "products", "menuItems", "menu_items", "foods")
+NAME_KEYS = ("name", "title", "itemName", "item_name", "productName", "dishName")
+DESC_KEYS = ("description", "desc", "itemDescription", "item_description", "summary")
+PRICE_KEYS: Tuple[Tuple[str, float], ...] = (
+    ("discountedPrice", 1),
+    ("discount_price", 1),
+    ("priceInMinorUnit", 100),
+    ("price_in_minor_unit", 100),
+    ("price", 1),
+    ("displayPrice", 1),
+    ("unitPrice", 1),
+    ("unit_price", 1),
+    ("amount", 1),
+)
+CHILD_KEYS = ("items", "dishes", "products", "menuItems", "menu_items", "foods", "subCategories", "sections", "categories")
+VARIATION_KEYS = ("variations", "variants", "productVariations", "product_variations", "options")
 
 
-def _to_price(d: dict):
+def _to_price(d: Dict[str, Any]) -> Optional[float]:
+    """Extract and normalize numerical price from a dictionary or its variations."""
     for key, div in PRICE_KEYS:
         v = d.get(key)
-        if isinstance(v, dict):                      # e.g. {"amount": 12.9} / {"value": ...}
-            v = v.get("amount") or v.get("value")
+        if isinstance(v, dict):
+            v = v.get("amount") or v.get("value") or v.get("price")
         if isinstance(v, str):
             v = "".join(c for c in v if c.isdigit() or c == ".") or None
         try:
             f = float(v) / div
-            if 0 < f < 1000:
+            if 0 < f < 2000:
                 return round(f, 2)
         except (TypeError, ValueError):
             continue
+
+    # Fallback: check nested product variations (common in Foodpanda & modern delivery APIs)
+    for var_key in VARIATION_KEYS:
+        vars_list = d.get(var_key)
+        if isinstance(vars_list, list) and vars_list:
+            for item in vars_list:
+                if isinstance(item, dict):
+                    price = _to_price(item)
+                    if price is not None:
+                        return price
     return None
 
 
-def _name(d: dict):
+def _name(d: Dict[str, Any]) -> Optional[str]:
+    """Extract a valid item or category name string."""
     for k in NAME_KEYS:
-        if isinstance(d.get(k), str) and 1 < len(d[k]) < 120:
-            return d[k].strip()
+        val = d.get(k)
+        if isinstance(val, str) and 1 < len(val.strip()) < 120:
+            return val.strip()
+    return None
 
 
-def _walk(node, category, out):
+def _walk(node: Any, category: Optional[str], out: List[Dict[str, Any]]) -> None:
+    """Recursively walk payload JSON nodes to collect category menu items."""
     if isinstance(node, list):
         for n in node:
             _walk(n, category, out)
     elif isinstance(node, dict):
         children = next((node[k] for k in CHILD_KEYS if isinstance(node.get(k), list)), None)
-        if children is not None:                     # a category container
-            category = _name(node) or category
+        if children is not None:
+            # Category container node
+            cat_name = _name(node)
+            current_cat = cat_name if cat_name and cat_name.lower() not in ("menu", "categories") else category
+            for c in children:
+                _walk(c, current_cat, out)
+            for k, v in node.items():
+                if k not in CHILD_KEYS and isinstance(v, (dict, list)):
+                    _walk(v, current_cat, out)
         else:
             name, price = _name(node), _to_price(node)
             if name and price is not None:
-                desc = next((node[k] for k in DESC_KEYS if isinstance(node.get(k), str)), None)
-                out.append({"category": category, "name": name, "description": desc,
-                            "price": price, "currency": "MYR"})
-        for v in node.values():
-            if isinstance(v, (dict, list)):
-                _walk(v, category, out)
+                desc = next(
+                    (str(node[k]).strip() for k in DESC_KEYS if isinstance(node.get(k), str) and node[k].strip()),
+                    None,
+                )
+                out.append({
+                    "category": category or "General",
+                    "name": name,
+                    "description": desc,
+                    "price": price,
+                    "currency": "MYR",
+                })
+            else:
+                for v in node.values():
+                    if isinstance(v, (dict, list)):
+                        _walk(v, category, out)
+
+
+def _extract_meta_from_jsonld(html: str) -> Dict[str, Any]:
+    """Parse JSON-LD restaurant metadata from HTML if available."""
+    meta: Dict[str, Any] = {}
+    if not html:
+        return meta
+
+    try:
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html, "html.parser")
+        for s in soup.find_all("script", type="application/ld+json"):
+            try:
+                data = json.loads(s.string or "{}")
+                nodes = data if isinstance(data, list) else [data]
+                for node in nodes:
+                    if not isinstance(node, dict):
+                        continue
+                    types = node.get("@type", "")
+                    types_list = [str(t).lower() for t in (types if isinstance(types, list) else [types])]
+                    if any(t in types_list for t in ("restaurant", "foodestablishment", "localbusiness", "cafe", "fastfoodrestaurant")):
+                        if node.get("name") and not meta.get("name"):
+                            meta["name"] = str(node["name"]).strip()
+                        if node.get("aggregateRating") and meta.get("rating") is None:
+                            ar = node["aggregateRating"]
+                            val = ar.get("ratingValue") if isinstance(ar, dict) else ar
+                            if val is not None:
+                                try:
+                                    meta["rating"] = round(float(val), 1)
+                                except (TypeError, ValueError):
+                                    pass
+                        if node.get("servesCuisine") and not meta.get("cuisine"):
+                            c = node["servesCuisine"]
+                            meta["cuisine"] = ", ".join(c) if isinstance(c, list) else str(c).strip()
+                        if node.get("address") and not meta.get("address"):
+                            addr = node["address"]
+                            if isinstance(addr, dict):
+                                parts = [addr.get("streetAddress"), addr.get("addressLocality"), addr.get("postalCode")]
+                                meta["address"] = ", ".join(str(p).strip() for p in parts if p)
+                            elif isinstance(addr, str):
+                                meta["address"] = addr.strip()
+                        if node.get("geo") and (meta.get("lat") is None or meta.get("lon") is None):
+                            geo = node["geo"]
+                            if isinstance(geo, dict):
+                                try:
+                                    meta["lat"] = round(float(geo.get("latitude")), 6)
+                                    meta["lon"] = round(float(geo.get("longitude")), 6)
+                                except (TypeError, ValueError):
+                                    pass
+                        if node.get("openingHoursSpecification") and not meta.get("opening_hours"):
+                            specs = node["openingHoursSpecification"]
+                            if isinstance(specs, list) and specs:
+                                spec = specs[0]
+                                if isinstance(spec, dict) and "opens" in spec and "closes" in spec:
+                                    meta["opening_hours"] = f"{spec['opens']} - {spec['closes']}"
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    return meta
 
 
 def extract_metadata_from_payloads(payloads: list, html: str = "") -> dict:
-    meta = {
+    """Extract restaurant metadata (rating, cuisine, hours, address, coordinates, name)."""
+    meta: Dict[str, Any] = {
         "rating": None,
         "cuisine": None,
         "opening_hours": None,
@@ -68,7 +174,14 @@ def extract_metadata_from_payloads(payloads: list, html: str = "") -> dict:
         "name": None,
     }
 
-    def _walk_meta(node):
+    # 1. Primary: Extract structured JSON-LD from HTML
+    jsonld_meta = _extract_meta_from_jsonld(html)
+    for k, v in jsonld_meta.items():
+        if v is not None and meta.get(k) is None:
+            meta[k] = v
+
+    # 2. Walk payloads for missing metadata
+    def _walk_meta(node: Any) -> None:
         if not isinstance(node, (dict, list)):
             return
         if isinstance(node, list):
@@ -76,15 +189,30 @@ def extract_metadata_from_payloads(payloads: list, html: str = "") -> dict:
                 _walk_meta(item)
             return
 
-        # Rating
+        # Name
+        if meta["name"] is None:
+            for container in ("vendorData", "merchant", "store", "restaurant", "vendor"):
+                if container in node and isinstance(node[container], dict):
+                    c_name = node[container].get("name")
+                    if isinstance(c_name, str) and 2 < len(c_name.strip()) < 100:
+                        meta["name"] = c_name.strip()
+                        break
+            if meta["name"] is None:
+                for k in ("merchantName", "storeName", "restaurantName", "vendorName", "vendor_name"):
+                    val = node.get(k)
+                    if isinstance(val, str) and 2 < len(val.strip()) < 100:
+                        meta["name"] = val.strip()
+                        break
+
+        # Rating (e.g. GrabFood ratingScore, Foodpanda vendorRating.value)
         if meta["rating"] is None:
-            for k in ("ratingScore", "rating_score", "star_rating", "rating", "vote_average", "score"):
+            for k in ("ratingScore", "rating_score", "star_rating", "rating", "vote_average", "score", "vendorRating"):
                 val = node.get(k)
                 if isinstance(val, (int, float)) and 1.0 <= val <= 5.0:
                     meta["rating"] = round(float(val), 1)
                     break
                 elif isinstance(val, dict):
-                    score = val.get("score") or val.get("value") or val.get("rating")
+                    score = val.get("value") or val.get("score") or val.get("rating")
                     if isinstance(score, (int, float)) and 1.0 <= score <= 5.0:
                         meta["rating"] = round(float(score), 1)
                         break
@@ -102,7 +230,7 @@ def extract_metadata_from_payloads(payloads: list, html: str = "") -> dict:
                     if clean_tags:
                         meta["cuisine"] = ", ".join(clean_tags[:6])
                         break
-                elif isinstance(val, str) and 2 < len(val) < 100 and val.strip().lower() not in ("cuisine", "cuisines"):
+                elif isinstance(val, str) and 2 < len(val.strip()) < 100 and val.strip().lower() not in ("cuisine", "cuisines"):
                     meta["cuisine"] = val.strip()
                     break
 
@@ -110,51 +238,74 @@ def extract_metadata_from_payloads(payloads: list, html: str = "") -> dict:
         if meta["opening_hours"] is None:
             for k in ("openingHours", "opening_hours", "businessHours", "operatingHours", "displayedHours"):
                 val = node.get(k)
-                if isinstance(val, str) and 3 < len(val) < 120 and val.strip().lower() not in ("opening hours", "business hours", "hours"):
+                if isinstance(val, str) and 3 < len(val.strip()) < 120 and val.strip().lower() not in ("opening hours", "business hours", "hours"):
                     meta["opening_hours"] = val.strip()
                     break
                 elif isinstance(val, dict):
                     disp = val.get("displayedHours") or val.get("displayHours") or val.get("hours")
-                    if isinstance(disp, str) and disp and disp.strip().lower() not in ("opening hours", "business hours", "hours"):
+                    if isinstance(disp, str) and disp.strip().lower() not in ("opening hours", "business hours", "hours"):
                         meta["opening_hours"] = disp.strip()
                         break
+            # Check Foodpanda schedules structure
+            if meta["opening_hours"] is None and "schedules" in node and isinstance(node["schedules"], dict):
+                try:
+                    weekly = node["schedules"].get("weekly", {})
+                    for day in ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"):
+                        day_sched = weekly.get(day, {}).get("delivery", [])
+                        if day_sched and isinstance(day_sched, list):
+                            tod = day_sched[0].get("timeOfDayRange", {})
+                            from_t, to_t = tod.get("from"), tod.get("to")
+                            if from_t and to_t:
+                                meta["opening_hours"] = f"{from_t} - {to_t}"
+                                break
+                except Exception:
+                    pass
 
-        # Address
+        # Coordinates & Address from vendor-specific location objects first
+        if "location" in node and isinstance(node["location"], dict):
+            loc = node["location"]
+            if meta["lat"] is None and "latitude" in loc and "longitude" in loc:
+                try:
+                    meta["lat"] = round(float(loc["latitude"]), 6)
+                    meta["lon"] = round(float(loc["longitude"]), 6)
+                except (TypeError, ValueError):
+                    pass
+            if meta["address"] is None and "addressLine1" in loc:
+                parts = [loc.get("addressLine1"), loc.get("addressLine2"), loc.get("postcode")]
+                city = loc.get("city", {})
+                if isinstance(city, dict) and city.get("name"):
+                    parts.append(city.get("name"))
+                clean_addr = ", ".join(str(p).strip() for p in parts if p and str(p).strip())
+                if clean_addr:
+                    meta["address"] = clean_addr
+
+        # Generic Address
         if meta["address"] is None:
             for k in ("combinedAddress", "displayAddress", "address", "streetAddress", "formattedAddress"):
                 val = node.get(k)
-                if isinstance(val, str) and 5 < len(val) < 250 and not val.startswith("http"):
+                if isinstance(val, str) and 5 < len(val.strip()) < 250 and not val.startswith("http"):
                     meta["address"] = val.strip()
                     break
                 elif isinstance(val, dict):
-                    c = (val.get("combinedAddress") or val.get("address") or val.get("street") or
-                         val.get("address1") or val.get("line1") or val.get("formattedAddress") or
-                         val.get("streetAddress"))
-                    if isinstance(c, str) and 3 < len(c) < 250:
+                    c = (
+                        val.get("combinedAddress") or val.get("address") or val.get("street") or
+                        val.get("address1") or val.get("line1") or val.get("formattedAddress") or
+                        val.get("streetAddress")
+                    )
+                    if isinstance(c, str) and 3 < len(c.strip()) < 250:
                         meta["address"] = c.strip()
                         break
 
-        # Coordinates
+        # Coordinates fallback
         if meta["lat"] is None or meta["lon"] is None:
-            lat = node.get("latitude") or node.get("lat")
-            lon = node.get("longitude") or node.get("lng") or node.get("lon")
-            if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
-                if -90 <= lat <= 90 and -180 <= lon <= 180:
-                    meta["lat"] = round(float(lat), 6)
-                    meta["lon"] = round(float(lon), 6)
-            elif isinstance(node.get("latlng"), dict):
+            if "latlng" in node and isinstance(node["latlng"], dict):
                 ll = node["latlng"]
                 if "latitude" in ll and "longitude" in ll:
-                    meta["lat"] = round(float(ll["latitude"]), 6)
-                    meta["lon"] = round(float(ll["longitude"]), 6)
-
-        # Name
-        if meta["name"] is None:
-            for k in ("merchantName", "storeName", "restaurantName", "vendorName"):
-                val = node.get(k)
-                if isinstance(val, str) and 2 < len(val) < 100:
-                    meta["name"] = val.strip()
-                    break
+                    try:
+                        meta["lat"] = round(float(ll["latitude"]), 6)
+                        meta["lon"] = round(float(ll["longitude"]), 6)
+                    except (TypeError, ValueError):
+                        pass
 
         for v in node.values():
             if isinstance(v, (dict, list)):
@@ -163,9 +314,8 @@ def extract_metadata_from_payloads(payloads: list, html: str = "") -> dict:
     for p in payloads:
         _walk_meta(p)
 
-    # HTML Fallbacks
+    # 3. HTML text regex fallbacks
     if html:
-        import re
         if meta["rating"] is None:
             m = re.search(r'([1-5]\.[0-9])\s*(?:★|stars?|out of 5)', html, re.I)
             if m:
@@ -174,7 +324,11 @@ def extract_metadata_from_payloads(payloads: list, html: str = "") -> dict:
                 except ValueError:
                     pass
         if meta["opening_hours"] is None:
-            m = re.search(r'(?:opening\s*hours|open\s*until|business\s*hours)[:\s]*([0-9]{1,2}:[0-9]{2}\s*(?:am|pm)?\s*[-–]\s*[0-9]{1,2}:[0-9]{2}\s*(?:am|pm)?)', html, re.I)
+            m = re.search(
+                r'(?:opening\s*hours|open\s*until|business\s*hours)[:\s]*([0-9]{1,2}:[0-9]{2}\s*(?:am|pm)?\s*[-–]\s*[0-9]{1,2}:[0-9]{2}\s*(?:am|pm)?)',
+                html,
+                re.I,
+            )
             if m:
                 meta["opening_hours"] = m.group(1).strip()
 
@@ -182,17 +336,30 @@ def extract_metadata_from_payloads(payloads: list, html: str = "") -> dict:
 
 
 def extract_from_payloads(payloads: list) -> list:
-    out = []
+    """Walk payloads to extract all menu items."""
+    out: List[Dict[str, Any]] = []
     for p in payloads:
         _walk(p, None, out)
     return out
 
 
 def scrape_delivery(url: str, return_meta: bool = False):
-    html, payloads = capture(url, wait_ms=6000)
+    """Scrape menu items and optional metadata from a delivery platform URL."""
+    html, payloads = capture(url, wait_ms=5000)
+
+    # Check for embedded Next.js or JSON state in HTML
+    if html:
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html, "html.parser")
+            next_tag = soup.find("script", id="__NEXT_DATA__")
+            if next_tag and next_tag.string:
+                payloads = list(payloads) + [json.loads(next_tag.string)]
+        except Exception:
+            pass
+
     items = extract_from_payloads(payloads)
     if return_meta:
         meta = extract_metadata_from_payloads(payloads, html)
         return items, meta
     return items
-
