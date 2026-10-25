@@ -12,6 +12,7 @@ from . import config, db
 from .extract_delivery import scrape_delivery
 from .extract_website import scrape_website
 from .http_client import PoliteClient
+from .security import is_safe_url, sanitize_text
 
 logger = logging.getLogger("scraper.runner")
 
@@ -78,6 +79,38 @@ def cmd_scrape(
     save_sqlite: bool = True,
 ) -> dict:
     url = url.strip()
+    safe, reason = is_safe_url(url)
+    if not safe:
+        return {
+            "success": False,
+            "error": f"URL blocked by security policy: {reason}",
+            "restaurantName": name or "Restricted Target",
+            "url": url,
+            "source": "blocked",
+        }
+
+    # Sanitize user-provided fields
+    name = sanitize_text(name, 150)
+    cuisine = sanitize_text(cuisine, 100)
+    opening_hours = sanitize_text(opening_hours, 100)
+    address = sanitize_text(address, 250)
+    area = sanitize_text(area, 60)
+    if rating is not None:
+        try:
+            rating = round(max(0.0, min(5.0, float(rating))), 1)
+        except (ValueError, TypeError):
+            rating = None
+    if lat is not None:
+        try:
+            lat = round(max(-90.0, min(90.0, float(lat))), 6)
+        except (ValueError, TypeError):
+            lat = None
+    if lon is not None:
+        try:
+            lon = round(max(-180.0, min(180.0, float(lon))), 6)
+        except (ValueError, TypeError):
+            lon = None
+
     is_delivery = _is_delivery_url(url)
 
     source_label = "website"

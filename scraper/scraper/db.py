@@ -227,17 +227,26 @@ def set_fields(conn, restaurant_id: int, **fields):
     conn.commit()
 
 
+from .security import sanitize_csv_cell
+
+
 def export(conn, out_dir: Path) -> dict:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    rows = [dict(r) for r in conn.execute(
+    raw_rows = [dict(r) for r in conn.execute(
         "SELECT r.name AS restaurant, r.area, r.cuisine, r.rating, r.opening_hours, r.address, r.lat, r.lon, r.website,"
         " m.category, m.name AS item, m.description, m.price, m.currency, m.source, m.source_url, m.scraped_at"
         " FROM menu_items m JOIN restaurants r ON r.id=m.restaurant_id ORDER BY r.name, m.category, m.name")]
+    
+    # Sanitize each field against CSV Formula Injection (=, +, -, @)
+    sanitized_rows = []
+    for r in raw_rows:
+        sanitized_rows.append({k: sanitize_csv_cell(v) if isinstance(v, str) else v for k, v in r.items()})
+
     with open(out_dir / "menu_items.csv", "w", newline="", encoding="utf-8-sig") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0].keys()) if rows else ["restaurant"])
+        w = csv.DictWriter(f, fieldnames=list(raw_rows[0].keys()) if raw_rows else ["restaurant"])
         w.writeheader()
-        w.writerows(rows)
+        w.writerows(sanitized_rows)
     rests = [dict(r) for r in conn.execute("SELECT * FROM restaurants ORDER BY name")]
     for r in rests:
         r["menu"] = [dict(i) for i in conn.execute(

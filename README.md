@@ -458,17 +458,60 @@ The Vite API middleware (`vite-plugin-api.ts`) exposes the following endpoints:
 
 ---
 
-## Ethical Scraping & Rate Limiting Guidelines
+## Security Architecture & Rate Limiting Controls
 
-When utilizing this platform for market research, data analysis, or price monitoring, please adhere to responsible web data extraction practices:
+The system features multi-layered defensive security measures across both the Node.js API middleware and Python backend:
 
-1. **Polite Request Throttling**: The scraper enforces a minimum delay of **2.0 seconds** per host by default (`REQUEST_DELAY_S`). Do not disable rate limiting when crawling external domains.
-2. **Robots.txt Adherence**: The engine verifies `robots.txt` directives prior to initiating scrapes on restaurant domains (`RESPECT_ROBOTS = True`).
-3. **Transparent Identification**: Set a custom `SCRAPER_UA` variable that includes your organization or contact email. Never use placeholder domains such as `example.com` (Overpass rejects these with HTTP 406).
-4. **Terms of Service Compliance**:
-   - Third-party delivery platforms load dynamic content via internal JSON endpoints. The delivery extractor monitors publicly loaded browser payloads without bypassing bot detection or attacking private APIs.
-   - Respect platform Terms of Service, avoid overloading host infrastructure, and adhere to relevant data protection and usage policies.
-5. **No Credential Leaks**: Never commit `.env` or service account keys (`serviceAccountKey.json`) to version control.
+### 1. Multi-Tiered Rate Limiting & Concurrency Controls
+- **Sliding-Window In-Memory Limiter**:
+  - **Scrape & Sync Tier** (`/api/scrape`, `/api/firebase/sync`): **10 requests / 60 seconds** per IP.
+  - **Mutation Tier** (`/api/add-link`, `/api/update-restaurant`): **30 requests / 60 seconds** per IP.
+  - **Read & Analytics Tier** (`/api/restaurants`, `/api/items`, `/api/analytics`, `/api/export`): **120 requests / 60 seconds** per IP.
+  - Responds with `HTTP 429 Too Many Requests` and standard RFC rate-limit headers (`X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, `Retry-After`).
+  - Automatic background pruning of expired IP records to prevent memory leaks.
+- **Process Concurrency Semaphore**: Restricts simultaneous headless Chromium / scraper jobs to **2 concurrent processes** system-wide, preventing CPU/RAM exhaustion and OOM crashes.
+
+### 2. Server-Side Request Forgery (SSRF) Defense
+- **Protocol Allowlist**: Restricts input target URLs exclusively to `http:` and `https:`.
+- **IP & Host Blacklisting**: Validates and blocks loopback addresses (`127.0.0.0/8`, `localhost`, `::1`), private networks (RFC 1918: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), and link-local / cloud metadata services (`169.254.0.0/16`, `metadata.google.internal`).
+- Enforced at both the Node API middleware layer and the Python crawler (`PoliteClient`, `runner.py`).
+
+### 3. CLI Argument & Command Injection Defense
+- All parameters dispatched to Python child processes are sanitized (`sanitizeText`).
+- Rejects leading hyphens (`-`, `--`) that could be misparsed by CLI argument parsers.
+- Strict numeric boundary validation on ratings (`[0, 5]`) and geographic coordinates (`lat: [-90, 90]`, `lon: [-180, 180]`).
+
+### 4. Payload Size Limits & DoS Prevention
+- Request bodies are capped at **256 KB** (`MAX_BODY_SIZE`). Oversized requests trigger `HTTP 413 Payload Too Large`.
+- Unparseable or malformed JSON payloads return `HTTP 400 Bad Request`.
+- Python child process execution is guarded by a **90-second timeout**, terminating lingering processes via `SIGTERM` / `SIGKILL`.
+
+### 5. CSV Formula Injection (DDE) Neutralization
+- Cell values starting with spreadsheet formula triggers (`=`, `+`, `-`, `@`, `\t`, `\r`) are automatically escaped with a leading single quote (`'`), ensuring spreadsheet software (Excel, LibreOffice, Google Sheets) interprets exported data strictly as plain text.
+
+### 6. Defensive HTTP Security Headers
+- Every API response is served with:
+  - `X-Content-Type-Options: nosniff`
+  - `X-Frame-Options: DENY`
+  - `X-XSS-Protection: 1; mode=block`
+  - `Referrer-Policy: strict-origin-when-cross-origin`
+  - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
+  - `Cache-Control: no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0`
+  - Defensive CORS restricting origin access.
+
+### 7. Automated Security Test Suites
+Run the automated test suites verifying all security controls:
+
+```bash
+# Run both Node.js API security tests and Python scraper tests
+npm run test:all
+
+# Run Node.js security & rate limiting tests (27 tests)
+npm test
+
+# Run Python security, SSRF & scraper tests (20 tests)
+npm run test:python
+```
 
 ---
 

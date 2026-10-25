@@ -8,6 +8,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from . import config
+from .security import is_safe_url
 
 
 class PoliteClient:
@@ -22,6 +23,11 @@ class PoliteClient:
         self._robots: dict[str, RobotFileParser | None] = {}
 
     def allowed(self, url: str) -> bool:
+        # 1. SSRF & Insecure Protocol defense
+        safe, _ = is_safe_url(url)
+        if not safe:
+            return False
+
         if not config.RESPECT_ROBOTS:
             return True
         p = urlparse(url)
@@ -44,12 +50,16 @@ class PoliteClient:
         self._last[host] = time.time()
 
     def get(self, url: str, **kw) -> requests.Response | None:
-        """Return a Response, or None if disallowed by robots.txt or the request failed."""
+        """Return a Response, or None if disallowed by robots.txt, failed SSRF check, or error."""
         if not self.allowed(url):
             return None
         self._wait(url)
         try:
             r = self.s.get(url, timeout=config.REQUEST_TIMEOUT_S, **kw)
+            if r.status_code == 429:
+                retry_after = r.headers.get("Retry-After")
+                if retry_after and retry_after.isdigit():
+                    time.sleep(min(int(retry_after), 30))
             r.raise_for_status()
             return r
         except requests.RequestException:
