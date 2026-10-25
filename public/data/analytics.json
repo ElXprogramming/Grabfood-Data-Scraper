@@ -1,0 +1,431 @@
+{
+  "success": true,
+  "kpi": {
+    "totalRestaurants": 30,
+    "scrapedRestaurants": 6,
+    "totalItems": 1127,
+    "avgPrice": 13.24,
+    "medianPrice": 8,
+    "minPrice": 0.4,
+    "maxPrice": 79.9,
+    "stdDev": 11.33,
+    "q1": 4.5,
+    "q3": 20.33,
+    "iqr": 15.83,
+    "lowerBound": 0,
+    "upperBound": 44.08
+  },
+  "bins": [
+    {
+      "label": "< RM 5",
+      "min": 0,
+      "max": 5,
+      "count": 317
+    },
+    {
+      "label": "RM 5 - 10",
+      "min": 5,
+      "max": 10,
+      "count": 292
+    },
+    {
+      "label": "RM 10 - 15",
+      "min": 10,
+      "max": 15,
+      "count": 168
+    },
+    {
+      "label": "RM 15 - 20",
+      "min": 15,
+      "max": 20,
+      "count": 67
+    },
+    {
+      "label": "RM 20 - 25",
+      "min": 20,
+      "max": 25,
+      "count": 89
+    },
+    {
+      "label": "RM 25 - 30",
+      "min": 25,
+      "max": 30,
+      "count": 71
+    },
+    {
+      "label": "RM 30+",
+      "min": 30,
+      "max": 9999,
+      "count": 123
+    }
+  ],
+  "categories": [
+    {
+      "category": "Meal with Corn In Cup",
+      "count": 137,
+      "avg_price": 19.23,
+      "min_price": 1.32,
+      "max_price": 45.24
+    },
+    {
+      "category": "Meal with Cookies/Chips",
+      "count": 137,
+      "avg_price": 17.93,
+      "min_price": 1.32,
+      "max_price": 42.45
+    },
+    {
+      "category": "Cita Rasa Sate - Ayam",
+      "count": 101,
+      "avg_price": 11.32,
+      "min_price": 1.32,
+      "max_price": 44.85
+    },
+    {
+      "category": "For You",
+      "count": 93,
+      "avg_price": 12.45,
+      "min_price": 0.4,
+      "max_price": 51.8
+    },
+    {
+      "category": "Golden Assam Fish",
+      "count": 60,
+      "avg_price": 14.6,
+      "min_price": 1.32,
+      "max_price": 44.95
+    },
+    {
+      "category": "6-Inch A La Carte",
+      "count": 37,
+      "avg_price": 10.81,
+      "min_price": 1.32,
+      "max_price": 22.03
+    },
+    {
+      "category": "A La Carte Wrap",
+      "count": 36,
+      "avg_price": 11.44,
+      "min_price": 1.32,
+      "max_price": 23.07
+    },
+    {
+      "category": "A La Carte Salad",
+      "count": 36,
+      "avg_price": 12.25,
+      "min_price": 1.32,
+      "max_price": 25.14
+    },
+    {
+      "category": "A La Carte Footlong",
+      "count": 36,
+      "avg_price": 19.21,
+      "min_price": 2.64,
+      "max_price": 34.72
+    },
+    {
+      "category": "Minuman",
+      "count": 31,
+      "avg_price": 3.3,
+      "min_price": 1.5,
+      "max_price": 8.5
+    },
+    {
+      "category": "Nasi",
+      "count": 30,
+      "avg_price": 11.34,
+      "min_price": 2,
+      "max_price": 16.9
+    },
+    {
+      "category": "MAIN MENU",
+      "count": 23,
+      "avg_price": 20.83,
+      "min_price": 0.4,
+      "max_price": 27.9
+    }
+  ],
+  "restaurantBreakdown": [
+    {
+      "id": 20,
+      "name": "Subway - Alamesra",
+      "area": "alamesra",
+      "cuisine": "Fast Food, Sandwich",
+      "rating": 4.8,
+      "opening_hours": "09:00-22:30",
+      "address": "LOT 11, GROUND FLOOR, BLOCK B,  LORONG PLAZA PERMAI 1, ALAMESRA PLAZA SULAMAN COSTAL HIGHWAY,",
+      "lat": 6.0334,
+      "lon": 116.1253,
+      "item_count": 681,
+      "avg_price": 14.66,
+      "min_price": 1.32,
+      "max_price": 45.24
+    },
+    {
+      "id": 26,
+      "name": "Maimunah Food Corner (Alamesra)",
+      "area": "alamesra",
+      "cuisine": "Malaysian, Roti Canai, Asian",
+      "rating": 5,
+      "opening_hours": "07:00 - 24:00",
+      "address": "Block E, Ground Floor, Lot 30, Lorong Plaza Utama 3, Alamesra, Kota Kinabalu, 88450",
+      "lat": 6.033558,
+      "lon": 116.127149,
+      "item_count": 140,
+      "avg_price": 7.19,
+      "min_price": 0.5,
+      "max_price": 17
+    },
+    {
+      "id": 24,
+      "name": "After 10 Cafe",
+      "area": "1borneo",
+      "cuisine": "Laksa,Fried Chicken",
+      "rating": 4.6,
+      "opening_hours": "10:00-21:00",
+      "address": "No. C-151 & C-152, Concourse Floor, 1Borneo, Hypermall, Jalan Sulaman,",
+      "lat": null,
+      "lon": null,
+      "item_count": 123,
+      "avg_price": 9.96,
+      "min_price": 1.5,
+      "max_price": 79.9
+    },
+    {
+      "id": 19,
+      "name": "Ayam Gepuk Bahru Alamesra",
+      "area": "alamesra",
+      "cuisine": "Indonesian, Fast Food, Ayam Gepuk",
+      "rating": 4.3,
+      "opening_hours": "10:00 - 22:00",
+      "address": "Lot 108 DBKK No.M-1, Ground Floor, Block M, Alamesra Plaza Permai, Jalan Sulaman,",
+      "lat": null,
+      "lon": null,
+      "item_count": 89,
+      "avg_price": 16.32,
+      "min_price": 0.4,
+      "max_price": 37
+    },
+    {
+      "id": 25,
+      "name": "Upperstar 1 Borneo",
+      "area": "1borneo",
+      "cuisine": "Burger,Chicken Chop,Pizza",
+      "rating": 4.5,
+      "opening_hours": "10:00-21:00",
+      "address": "Jalan Sulaman",
+      "lat": null,
+      "lon": null,
+      "item_count": 61,
+      "avg_price": 15.6,
+      "min_price": 1,
+      "max_price": 51.8
+    },
+    {
+      "id": 21,
+      "name": "Ayam gepuk jowo kelate",
+      "area": "alamesra",
+      "cuisine": "Indonesian,Smashed Fried Chicken,Rice",
+      "rating": 4.7,
+      "opening_hours": "11:00-21:00",
+      "address": "Lot 39, GF, Blok E, Lorong Plaza Permai 2 Alamesra, Alamesra, Sultan Coastal Highway, Likas,",
+      "lat": null,
+      "lon": null,
+      "item_count": 33,
+      "avg_price": 9.31,
+      "min_price": 2.8,
+      "max_price": 45
+    }
+  ],
+  "keywords": [
+    {
+      "word": "chicken",
+      "frequency": 183
+    },
+    {
+      "word": "ayam",
+      "frequency": 106
+    },
+    {
+      "word": "cheese",
+      "frequency": 91
+    },
+    {
+      "word": "mayo",
+      "frequency": 81
+    },
+    {
+      "word": "scoops",
+      "frequency": 77
+    },
+    {
+      "word": "goreng",
+      "frequency": 72
+    },
+    {
+      "word": "egg",
+      "frequency": 67
+    },
+    {
+      "word": "nasi",
+      "frequency": 59
+    },
+    {
+      "word": "inch",
+      "frequency": 59
+    },
+    {
+      "word": "spicy",
+      "frequency": 56
+    },
+    {
+      "word": "salad",
+      "frequency": 56
+    },
+    {
+      "word": "footlong",
+      "frequency": 55
+    },
+    {
+      "word": "wrap",
+      "frequency": 54
+    },
+    {
+      "word": "italian",
+      "frequency": 53
+    },
+    {
+      "word": "tuna",
+      "frequency": 52
+    },
+    {
+      "word": "scoop",
+      "frequency": 44
+    },
+    {
+      "word": "roasted",
+      "frequency": 37
+    },
+    {
+      "word": "tea",
+      "frequency": 36
+    },
+    {
+      "word": "golden",
+      "frequency": 32
+    },
+    {
+      "word": "seafood",
+      "frequency": 32
+    },
+    {
+      "word": "butter",
+      "frequency": 31
+    },
+    {
+      "word": "8oz",
+      "frequency": 30
+    },
+    {
+      "word": "hot",
+      "frequency": 30
+    },
+    {
+      "word": "gepuk",
+      "frequency": 29
+    }
+  ],
+  "outliers": [
+    {
+      "id": 1962,
+      "name": "Ayam Goreng (15) Pieces",
+      "price": 79.9,
+      "category": "Ayam Goreng Crispy\u0002",
+      "restaurant_name": "After 10 Cafe"
+    },
+    {
+      "id": 1966,
+      "name": "Sayap Goreng Crispy (15) Pieces",
+      "price": 69,
+      "category": "Sayap Goreng Crispy\u0002",
+      "restaurant_name": "After 10 Cafe"
+    },
+    {
+      "id": 1990,
+      "name": "COMBO 3",
+      "price": 66.9,
+      "category": "COMBO JIMATBAH",
+      "restaurant_name": "After 10 Cafe"
+    },
+    {
+      "id": 2695,
+      "name": "6 Pieces",
+      "price": 51.8,
+      "category": "For You",
+      "restaurant_name": "Upperstar 1 Borneo"
+    },
+    {
+      "id": 2724,
+      "name": "6 Pieces",
+      "price": 51.8,
+      "category": "Side Order",
+      "restaurant_name": "Upperstar 1 Borneo"
+    },
+    {
+      "id": 1996,
+      "name": "COMBO 2",
+      "price": 45.9,
+      "category": "COMBO JIMATBAH",
+      "restaurant_name": "After 10 Cafe"
+    },
+    {
+      "id": 2442,
+      "name": "Steak & Cheese Footlong",
+      "price": 45.24,
+      "category": "Meal with Corn In Cup",
+      "restaurant_name": "Subway - Alamesra"
+    },
+    {
+      "id": 2440,
+      "name": "Spicy Italian Footlong",
+      "price": 45.14,
+      "category": "Meal with Corn In Cup",
+      "restaurant_name": "Subway - Alamesra"
+    },
+    {
+      "id": 2441,
+      "name": "Roast Beef Footlong",
+      "price": 45.14,
+      "category": "Meal with Corn In Cup",
+      "restaurant_name": "Subway - Alamesra"
+    },
+    {
+      "id": 1877,
+      "name": "Dubai Chocolate Bolci",
+      "price": 45,
+      "category": "Chocolate",
+      "restaurant_name": "Ayam gepuk jowo kelate"
+    },
+    {
+      "id": 2210,
+      "name": "Golden Assam Fish Footlong\nMeal with Corn In Cup / Toasties",
+      "price": 44.95,
+      "category": "Golden Assam Fish",
+      "restaurant_name": "Subway - Alamesra"
+    },
+    {
+      "id": 2137,
+      "name": "Cita Rasa Sate - Ayam Footlong Meal with Corn In Cup / Toasties",
+      "price": 44.85,
+      "category": "Cita Rasa Sate - Ayam",
+      "restaurant_name": "Subway - Alamesra"
+    },
+    {
+      "id": 2443,
+      "name": "Italian B.M.T.™ Footlong",
+      "price": 44.39,
+      "category": "Meal with Corn In Cup",
+      "restaurant_name": "Subway - Alamesra"
+    }
+  ]
+}

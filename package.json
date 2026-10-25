@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/export-static-data.js && tsc -b && vite build",
     "lint": "eslint .",
     "test": "node --experimental-strip-types --test tests/security_middleware.test.ts",
     "test:python": "PYTHONPATH=scraper scraper/.venv/bin/pytest scraper/tests",

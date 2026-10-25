@@ -5,6 +5,34 @@
 [build.environment]
   NODE_VERSION = "22"
 
+# Direct static dataset redirects for API routes on Netlify
+[[redirects]]
+  from = "/api/restaurants"
+  to = "/data/restaurants.json"
+  status = 200
+
+[[redirects]]
+  from = "/api/analytics"
+  to = "/data/analytics.json"
+  status = 200
+
+[[redirects]]
+  from = "/api/firebase/status"
+  to = "/data/firebase_status.json"
+  status = 200
+
+[[redirects]]
+  from = "/api/export"
+  to = "/data/menu_items.csv"
+  status = 200
+  query = {format = "csv"}
+
+[[redirects]]
+  from = "/api/export"
+  to = "/data/restaurant_menu_dataset.json"
+  status = 200
+  query = {format = "json"}
+
 # Single-Page Application (SPA) redirect rule
 [[redirects]]
   from = "/*"
