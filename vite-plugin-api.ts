@@ -141,11 +141,8 @@ export function apiPlugin(options?: {
     });
   }
 
-  return {
-    name: 'restaurant-scraper-api',
-    configureServer(server) {
-      server.middlewares.use(async (req, res, next) => {
-        const urlObj = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+  const apiMiddleware = async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+    const urlObj = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
         const pathname = urlObj.pathname;
         const origin = (req.headers.origin as string) || undefined;
 
@@ -949,7 +946,15 @@ export function apiPlugin(options?: {
           }
           sendJson(res, 500, { success: false, error: 'Internal server error.' }, origin);
         }
-      });
+  };
+
+  return {
+    name: 'restaurant-scraper-api',
+    configureServer(server) {
+      server.middlewares.use(apiMiddleware);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(apiMiddleware);
     },
   };
 }
