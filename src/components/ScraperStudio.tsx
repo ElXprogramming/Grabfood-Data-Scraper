@@ -16,6 +16,7 @@ import {
   Edit2,
   Search,
   ArrowRight,
+  Code,
 } from 'lucide-react';
 import { api } from '../api/client';
 import type { Restaurant, ScrapeResult } from '../types';
@@ -25,6 +26,7 @@ interface ScraperStudioProps {
   restaurants: Restaurant[];
   onScrapeSuccess: () => void;
   onNavigateToData: (restaurantId?: number) => void;
+  onNavigateToArch?: () => void;
 }
 
 interface LogEntry {
@@ -61,6 +63,7 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
   restaurants,
   onScrapeSuccess,
   onNavigateToData,
+  onNavigateToArch,
 }) => {
   const [url, setUrl] = useState('');
   const [restaurantName, setRestaurantName] = useState('');
@@ -278,6 +281,18 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
             Harvest menu items, pricing, and spatial coordinates into local SQLite and Cloud Firestore.
           </p>
         </div>
+        {onNavigateToArch && (
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={onNavigateToArch}
+            title="Inspect GrabFood headless scraper source code and architecture"
+          >
+            <Code size={13} />
+            <span>GrabFood Scraper Source</span>
+            <ArrowRight size={13} />
+          </button>
+        )}
       </div>
 
       {/* Scraper Input Command Bar */}

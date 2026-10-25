@@ -90,6 +90,10 @@ export function App() {
             restaurants={restaurants}
             onScrapeSuccess={loadData}
             onNavigateToData={handleNavigateToData}
+            onNavigateToArch={() => {
+              setActiveTab('architecture');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
           />
         )}
 

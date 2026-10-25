@@ -1862,6 +1862,155 @@
   color: var(--text-dim);
 }
 
+/* GrabFood Scraper Engine Code Viewer Styles */
+.arch-grab-banner {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+
+.grab-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.code-lang-pill {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+}
+
+.arch-grab-desc {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.arch-code-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.code-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border-color);
+  padding: 8px 12px;
+}
+
+.code-file-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.code-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 5px 10px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.code-tab-btn:hover {
+  color: var(--text-main);
+  background: var(--bg-card);
+  border-color: var(--border-color);
+}
+
+.code-tab-btn.active {
+  color: var(--text-main);
+  background: var(--bg-card);
+  border-color: var(--border-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.file-badge {
+  font-size: 10px;
+  color: var(--text-dim);
+  background: var(--bg-subtle);
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-family: var(--font-mono);
+}
+
+.code-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.code-viewport {
+  max-height: 540px;
+  overflow-y: auto;
+  overflow-x: auto;
+  background: #0d1117;
+  padding: 12px 0;
+  scrollbar-width: thin;
+  scrollbar-color: #30363d transparent;
+}
+
+.code-pre {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.code-line-row {
+  display: flex;
+  align-items: flex-start;
+  min-height: 19px;
+  padding: 0 12px;
+}
+
+.code-line-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.code-line-number {
+  display: inline-block;
+  width: 42px;
+  min-width: 42px;
+  color: #484f58;
+  font-size: 10.5px;
+  text-align: right;
+  padding-right: 14px;
+  user-select: none;
+}
+
+.code-line-text {
+  color: #e6edf3;
+  white-space: pre;
+  word-break: normal;
+  tab-size: 4;
+}
+
 /* ==========================================================================
    MODAL
    ========================================================================== */

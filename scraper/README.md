@@ -15,10 +15,22 @@ discover  ->  scrape / delivery  ->  export
 | discover | Google Places API (New) | best coverage | needs `GOOGLE_PLACES_API_KEY` |
 | scrape | restaurant website (JSON-LD, then text heuristics, then text PDFs) | medium | most local places have no site |
 | scrape `--render` | same, via headless Chromium | medium | for JS-heavy sites |
-| delivery | GrabFood / foodpanda page you supply | experimental | may be blocked; check ToS |
+| delivery | GrabFood / foodpanda page you supply | high | Headless Playwright Chromium sniffing JSON calls |
 | (manual) | menus that are only photos | n/a | stored in `menu_assets`, run OCR or enter by hand |
 
 Facebook and Instagram are deliberately **not** scraped (login wall, ToS). Their links are saved for manual review.
+
+## GrabFood Headless Extraction Engine
+
+GrabFood uses dynamic Next.js rendering and loads menu items via internal asynchronous JSON APIs. Traditional HTML crawlers return empty shells.
+
+This repository implements a **passive network sniffer** via Playwright Chromium:
+1. **`scraper/browser.py`**: Launches headless Chromium with Kota Kinabalu geolocation (`6.0360, 116.1297`) and `en-MY` locale to bypass Grab's regional delivery locks. Intercepts all background JSON responses using `page.on("response")`.
+2. **`scraper/extract_delivery.py`**:
+   - Recursively walks JSON catalog structures (`_walk()`) across nested categories, sections, and variation trees.
+   - Normalizes pricing: converts `priceInMinorUnit / 100` into float Ringgit (MYR), handling discount variations.
+   - Extracts merchant metadata (ratings, cuisines, operating hours, address, coordinates).
+   - Fallback extraction of `<script id="__NEXT_DATA__">` JSON state from rendered HTML.
 
 ## Setup
 
