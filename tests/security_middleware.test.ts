@@ -225,8 +225,15 @@ describe('7. End-to-End API Middleware Integration Tests', () => {
   let baseUrl: string;
   let testRateLimiter: RateLimiter;
   let testConcurrencyLimiter: ConcurrencyLimiter;
+  let tempDbPath: string;
 
   before(async () => {
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    tempDbPath = path.join(os.tmpdir(), `menus-test-${process.pid}-${Date.now()}.db`);
+    fs.copyFileSync(path.join(process.cwd(), 'scraper/data/menus.db'), tempDbPath);
+
     testRateLimiter = new RateLimiter({
       scrape: { windowMs: 10_000, maxRequests: 3 },
       mutation: { windowMs: 10_000, maxRequests: 5 },
@@ -237,6 +244,7 @@ describe('7. End-to-End API Middleware Integration Tests', () => {
     const plugin = apiPlugin({
       rateLimiter: testRateLimiter,
       concurrencyLimiter: testConcurrencyLimiter,
+      dbPath: tempDbPath,
     });
 
     const mockViteServer = {
@@ -270,10 +278,15 @@ describe('7. End-to-End API Middleware Integration Tests', () => {
     testRateLimiter.reset();
   });
 
-  after(() => {
+  after(async () => {
     testRateLimiter.destroy();
     server.close();
+    const fs = await import('node:fs');
+    if (tempDbPath && fs.existsSync(tempDbPath)) {
+      fs.unlinkSync(tempDbPath);
+    }
   });
+
 
   test('GET /api/restaurants includes security and rate limit headers', async () => {
     const res = await fetch(`${baseUrl}/api/restaurants`);

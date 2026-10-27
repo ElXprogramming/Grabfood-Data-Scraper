@@ -59,6 +59,22 @@ const PRESETS = [
   },
 ];
 
+const AREA_PRESETS = {
+  '1borneo': {
+    lat: '6.036082',
+    lon: '116.130047',
+    area: '1borneo',
+    address: '1Borneo Hypermall, Jalan Sulaman, Kota Kinabalu',
+  },
+  alamesra: {
+    lat: '6.028450',
+    lon: '116.126120',
+    area: 'alamesra',
+    address: 'Plaza Permai, Alamesra, Kota Kinabalu',
+  },
+} as const;
+
+
 export const ScraperStudio: React.FC<ScraperStudioProps> = ({
   restaurants,
   onScrapeSuccess,
@@ -246,19 +262,14 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
     }
   };
 
-  const handleQuickPin = (location: '1borneo' | 'alamesra') => {
-    if (location === '1borneo') {
-      setLat('6.036082');
-      setLon('116.130047');
-      setArea('1borneo');
-      setAddress('1Borneo Hypermall, Jalan Sulaman, Kota Kinabalu');
-    } else {
-      setLat('6.028450');
-      setLon('116.126120');
-      setArea('alamesra');
-      setAddress('Plaza Permai, Alamesra, Kota Kinabalu');
-    }
+  const handleQuickPin = (location: keyof typeof AREA_PRESETS) => {
+    const preset = AREA_PRESETS[location];
+    setLat(preset.lat);
+    setLon(preset.lon);
+    setArea(preset.area);
+    setAddress(preset.address);
   };
+
 
   // Filtered restaurants for table
   const filteredRestaurants = restaurants.filter((r) => {
@@ -714,28 +725,14 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
                   <td className="align-right">
                     <div className="action-button-group">
                       {/* Scrape button if url available */}
-                      {rest.grab_url ? (
+                      {rest.grab_url || rest.website ? (
                         <button
                           type="button"
                           className="btn-cell-action"
                           onClick={() => {
-                            setUrl(rest.grab_url!);
+                            setUrl((rest.grab_url || rest.website)!);
                             setRestaurantName(rest.name);
-                            setRenderBrowser(false);
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                          }}
-                          title="Load URL and scrape"
-                        >
-                          Scrape
-                        </button>
-                      ) : rest.website ? (
-                        <button
-                          type="button"
-                          className="btn-cell-action"
-                          onClick={() => {
-                            setUrl(rest.website!);
-                            setRestaurantName(rest.name);
-                            setRenderBrowser(true);
+                            setRenderBrowser(!rest.grab_url);
                             window.scrollTo({ top: 0, behavior: 'smooth' });
                           }}
                           title="Load URL and scrape"
@@ -752,6 +749,7 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
                           <Plus size={12} /> Attach
                         </button>
                       )}
+
 
                       {/* Edit metadata */}
                       <button
@@ -889,29 +887,22 @@ export const ScraperStudio: React.FC<ScraperStudioProps> = ({
 
               <div className="modal-preset-pins">
                 <span className="text-dim">Preset Coordinates:</span>
-                <button
-                  type="button"
-                  className="btn-tiny"
-                  onClick={() => {
-                    setModalLat('6.036082');
-                    setModalLon('116.130047');
-                    setModalArea('1borneo');
-                  }}
-                >
-                  1Borneo
-                </button>
-                <button
-                  type="button"
-                  className="btn-tiny"
-                  onClick={() => {
-                    setModalLat('6.028450');
-                    setModalLon('116.126120');
-                    setModalArea('alamesra');
-                  }}
-                >
-                  Alamesra
-                </button>
+                {(['1borneo', 'alamesra'] as const).map((loc) => (
+                  <button
+                    key={loc}
+                    type="button"
+                    className="btn-tiny"
+                    onClick={() => {
+                      setModalLat(AREA_PRESETS[loc].lat);
+                      setModalLon(AREA_PRESETS[loc].lon);
+                      setModalArea(AREA_PRESETS[loc].area);
+                    }}
+                  >
+                    {loc === '1borneo' ? '1Borneo' : 'Alamesra'}
+                  </button>
+                ))}
               </div>
+
             </div>
 
             <div className="modal-footer">

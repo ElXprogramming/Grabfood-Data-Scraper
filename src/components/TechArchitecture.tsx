@@ -13,43 +13,35 @@ import {
   FileCode,
   Terminal,
 } from 'lucide-react';
-import {
-  EXTRACT_DELIVERY_CODE,
-  BROWSER_CAPTURE_CODE,
-  RUNNER_ORCHESTRATION_CODE,
-} from '../data/grabfoodCode';
+import extractDeliveryCode from '../../scraper/scraper/extract_delivery.py?raw';
+import browserCaptureCode from '../../scraper/scraper/browser.py?raw';
+import runnerCode from '../../scraper/scraper/runner.py?raw';
 
-interface TechArchitectureProps {
-  initialTab?: 'grabfood' | 'topology' | 'interception' | 'dedup' | 'sync' | 'datamining';
-}
+const CODE_FILES = {
+  extract_delivery: {
+    code: extractDeliveryCode.trimEnd(),
+    path: 'scraper/scraper/extract_delivery.py',
+  },
+  browser: {
+    code: browserCaptureCode.trimEnd(),
+    path: 'scraper/scraper/browser.py',
+  },
+  runner: {
+    code: runnerCode.trimEnd(),
+    path: 'scraper/scraper/runner.py',
+  },
+} as const;
 
-export const TechArchitecture: React.FC<TechArchitectureProps> = ({
-  initialTab = 'grabfood',
-}) => {
+export const TechArchitecture: React.FC = () => {
   const [activeDiagram, setActiveDiagram] = useState<
     'grabfood' | 'topology' | 'interception' | 'dedup' | 'sync' | 'datamining'
-  >(initialTab);
+  >('grabfood');
 
-  const [activeCodeFile, setActiveCodeFile] = useState<
-    'extract_delivery' | 'browser' | 'runner'
-  >('extract_delivery');
-
+  const [activeCodeFile, setActiveCodeFile] = useState<keyof typeof CODE_FILES>('extract_delivery');
   const [copied, setCopied] = useState(false);
 
-  const currentCode =
-    activeCodeFile === 'extract_delivery'
-      ? EXTRACT_DELIVERY_CODE
-      : activeCodeFile === 'browser'
-      ? BROWSER_CAPTURE_CODE
-      : RUNNER_ORCHESTRATION_CODE;
-
-  const currentFilePath =
-    activeCodeFile === 'extract_delivery'
-      ? 'scraper/scraper/extract_delivery.py'
-      : activeCodeFile === 'browser'
-      ? 'scraper/scraper/browser.py'
-      : 'scraper/scraper/runner.py';
-
+  const currentCode = CODE_FILES[activeCodeFile].code;
+  const currentFilePath = CODE_FILES[activeCodeFile].path;
   const githubUrl = `https://github.com/ElXprogramming/Grabfood-Data-Scraper/blob/main/${currentFilePath}`;
 
   const handleCopyCode = async () => {
@@ -63,6 +55,7 @@ export const TechArchitecture: React.FC<TechArchitectureProps> = ({
   };
 
   const codeLines = currentCode.split('\n');
+
 
   return (
     <div className="view-container">

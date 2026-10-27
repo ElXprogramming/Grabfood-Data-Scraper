@@ -50,19 +50,47 @@ export interface GetItemsResponse {
 
 let staticItemsCache: MenuItem[] | null = null;
 
+async function tryFetchJson<T>(url: string): Promise<T | null> {
+  try {
+    const res = await fetch(url);
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/json')) {
+      return (await res.json()) as T;
+    }
+  } catch {
+    // Local dev server not running or deployed on static host (e.g. Netlify)
+  }
+  return null;
+}
+
+async function postJson<T>(url: string, body: unknown, fallbackErrorPrefix: string): Promise<T | null> {
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/json')) {
+      return (await res.json()) as T;
+    }
+    if (!res.ok && contentType.includes('application/json')) {
+      const errData = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(errData.error || `${fallbackErrorPrefix} (HTTP ${res.status})`);
+    }
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message.includes(fallbackErrorPrefix)) {
+      throw err;
+    }
+  }
+  return null;
+}
+
 export const api = {
   async getRestaurants(): Promise<{ success: boolean; count: number; restaurants: Restaurant[] }> {
-    try {
-      const res = await fetch('/api/restaurants');
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
-        const data = await res.json();
-        if (data && data.success && Array.isArray(data.restaurants)) {
-          return data;
-        }
-      }
-    } catch {
-      // Local dev server not running or deployed on static host (e.g. Netlify)
+    const data = await tryFetchJson<{ success: boolean; count: number; restaurants: Restaurant[] }>('/api/restaurants');
+    if (data?.success && Array.isArray(data.restaurants)) {
+      return data;
     }
 
     const staticRes = await fetch('/data/restaurants.json');
@@ -84,17 +112,9 @@ export const api = {
     if (params.limit != null) query.set('limit', String(params.limit));
     if (params.offset != null) query.set('offset', String(params.offset));
 
-    try {
-      const res = await fetch(`/api/items?${query.toString()}`);
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
-        const data = await res.json();
-        if (data && data.success && Array.isArray(data.items)) {
-          return data;
-        }
-      }
-    } catch {
-      // Local dev server not running or deployed on static host (e.g. Netlify)
+    const data = await tryFetchJson<GetItemsResponse>(`/api/items?${query.toString()}`);
+    if (data?.success && Array.isArray(data.items)) {
+      return data;
     }
 
     // Static fallback: load items.json and filter in-memory with identical semantics
@@ -113,9 +133,9 @@ export const api = {
       const q = params.search.toLowerCase();
       filtered = filtered.filter((item) =>
         item.name.toLowerCase().includes(q) ||
-        (item.description && item.description.toLowerCase().includes(q)) ||
-        (item.restaurant_name && item.restaurant_name.toLowerCase().includes(q)) ||
-        (item.cuisine && item.cuisine.toLowerCase().includes(q))
+        item.description?.toLowerCase().includes(q) ||
+        item.restaurant_name?.toLowerCase().includes(q) ||
+        item.cuisine?.toLowerCase().includes(q)
       );
     }
     if (params.category) {
@@ -123,7 +143,7 @@ export const api = {
     }
     if (params.cuisine) {
       const q = params.cuisine.toLowerCase();
-      filtered = filtered.filter((item) => item.cuisine && item.cuisine.toLowerCase().includes(q));
+      filtered = filtered.filter((item) => item.cuisine?.toLowerCase().includes(q));
     }
     if (params.minRating != null) {
       filtered = filtered.filter((item) => item.rating != null && item.rating >= params.minRating!);
@@ -165,17 +185,9 @@ export const api = {
   },
 
   async getAnalytics(): Promise<AnalyticsData> {
-    try {
-      const res = await fetch('/api/analytics');
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
-        const data = await res.json();
-        if (data && data.success && data.kpi) {
-          return data;
-        }
-      }
-    } catch {
-      // Local dev server not running or deployed on static host (e.g. Netlify)
+    const data = await tryFetchJson<AnalyticsData>('/api/analytics');
+    if (data?.success && data.kpi) {
+      return data;
     }
 
     const staticRes = await fetch('/data/analytics.json');
@@ -184,49 +196,19 @@ export const api = {
   },
 
   async scrapeUrl(options: ScrapeOptions): Promise<ScrapeResult> {
-    try {
-      const res = await fetch('/api/scrape', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(options),
-      });
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
-        return res.json();
-      }
-      if (!res.ok && contentType.includes('application/json')) {
-        const errData = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(errData.error || `Scrape failed with HTTP ${res.status}`);
-      }
-    } catch (err: unknown) {
-      if (err instanceof Error && err.message.includes('Scrape failed')) {
-        throw err;
-      }
-    }
+    const data = await postJson<ScrapeResult>('/api/scrape', options, 'Scrape failed');
+    if (data) return data;
 
     throw new Error('Live scraping execution requires the local development environment (Node.js & Python Playwright). The live Netlify deployment is running in high-performance static showcase mode.');
   },
 
   async updateRestaurant(params: UpdateRestaurantParams): Promise<{ success: boolean; message: string }> {
-    try {
-      const res = await fetch('/api/update-restaurant', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params),
-      });
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
-        return res.json();
-      }
-      if (!res.ok && contentType.includes('application/json')) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(err.error || 'Failed to update restaurant parameters');
-      }
-    } catch (err: unknown) {
-      if (err instanceof Error && err.message.includes('Failed to update')) {
-        throw err;
-      }
-    }
+    const data = await postJson<{ success: boolean; message: string }>(
+      '/api/update-restaurant',
+      params,
+      'Failed to update restaurant parameters'
+    );
+    if (data) return data;
 
     return {
       success: true,
@@ -239,25 +221,12 @@ export const api = {
     url: string,
     extra: Partial<UpdateRestaurantParams> = {}
   ): Promise<{ success: boolean; isMerged?: boolean; message: string }> {
-    try {
-      const res = await fetch('/api/add-link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, url, ...extra }),
-      });
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
-        return res.json();
-      }
-      if (!res.ok && contentType.includes('application/json')) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(err.error || 'Failed to add link');
-      }
-    } catch (err: unknown) {
-      if (err instanceof Error && err.message.includes('Failed to add')) {
-        throw err;
-      }
-    }
+    const data = await postJson<{ success: boolean; isMerged?: boolean; message: string }>(
+      '/api/add-link',
+      { name, url, ...extra },
+      'Failed to add link'
+    );
+    if (data) return data;
 
     return {
       success: true,
@@ -271,43 +240,5 @@ export const api = {
     }
     return `/api/export?format=${format}`;
   },
-
-  async getFirebaseStatus(): Promise<{ success: boolean; configured: boolean; projectId?: string }> {
-    try {
-      const res = await fetch('/api/firebase/status');
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
-        return res.json();
-      }
-    } catch {
-      // ignore
-    }
-
-    try {
-      const staticRes = await fetch('/data/firebase_status.json');
-      if (staticRes.ok) return staticRes.json();
-    } catch {
-      // ignore
-    }
-
-    return { success: true, configured: true, projectId: 'restaurantdatascraper' };
-  },
-
-  async syncFirebase(): Promise<{ success: boolean; restaurants_synced?: number; items_synced?: number; error?: string }> {
-    try {
-      const res = await fetch('/api/firebase/sync', { method: 'POST' });
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
-        return res.json();
-      }
-    } catch {
-      // ignore
-    }
-
-    return {
-      success: true,
-      restaurants_synced: 30,
-      items_synced: 1127,
-    };
-  },
 };
+

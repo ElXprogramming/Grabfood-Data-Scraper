@@ -17,11 +17,6 @@
   status = 200
 
 [[redirects]]
-  from = "/api/firebase/status"
-  to = "/data/firebase_status.json"
-  status = 200
-
-[[redirects]]
   from = "/api/export"
   to = "/data/menu_items.csv"
   status = 200

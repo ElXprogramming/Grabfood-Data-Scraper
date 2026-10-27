@@ -36,29 +36,12 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    let ignore = false;
-    async function init() {
-      setIsRefreshing(true);
-      try {
-        const [restRes, analyticsRes] = await Promise.all([
-          api.getRestaurants(),
-          api.getAnalytics(),
-        ]);
-        if (!ignore) {
-          if (restRes.success) setRestaurants(restRes.restaurants);
-          if (analyticsRes.success) setAnalytics(analyticsRes);
-        }
-      } catch (err) {
-        console.error('Failed to load application data:', err);
-      } finally {
-        if (!ignore) setIsRefreshing(false);
-      }
-    }
-    init();
-    return () => {
-      ignore = true;
+    const init = async () => {
+      await loadData();
     };
-  }, []);
+    void init();
+  }, [loadData]);
+
 
   const handleNavigateToData = (restaurantId?: number) => {
     if (restaurantId) {

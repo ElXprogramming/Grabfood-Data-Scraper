@@ -10,7 +10,10 @@ import json
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
+from bs4 import BeautifulSoup
+
 from .browser import capture
+
 
 NAME_KEYS = ("name", "title", "itemName", "item_name", "productName", "dishName")
 DESC_KEYS = ("description", "desc", "itemDescription", "item_description", "summary")
@@ -108,7 +111,6 @@ def _extract_meta_from_jsonld(html: str) -> Dict[str, Any]:
         return meta
 
     try:
-        from bs4 import BeautifulSoup
         soup = BeautifulSoup(html, "html.parser")
         for s in soup.find_all("script", type="application/ld+json"):
             try:
@@ -350,7 +352,6 @@ def scrape_delivery(url: str, return_meta: bool = False):
     # Check for embedded Next.js or JSON state in HTML
     if html:
         try:
-            from bs4 import BeautifulSoup
             soup = BeautifulSoup(html, "html.parser")
             next_tag = soup.find("script", id="__NEXT_DATA__")
             if next_tag and next_tag.string:

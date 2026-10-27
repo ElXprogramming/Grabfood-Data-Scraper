@@ -75,9 +75,10 @@ const ALLOWED_SORT_OPTIONS = new Set([
 export function apiPlugin(options?: {
   rateLimiter?: RateLimiter;
   concurrencyLimiter?: ConcurrencyLimiter;
+  dbPath?: string;
 }): Plugin {
   const rootDir = process.cwd();
-  const dbPath = path.join(rootDir, 'scraper/data/menus.db');
+  const dbPath = options?.dbPath || path.join(rootDir, 'scraper/data/menus.db');
   const pythonPath = path.join(rootDir, 'scraper/.venv/bin/python');
   const scraperDir = path.join(rootDir, 'scraper');
 
@@ -99,6 +100,80 @@ export function apiPlugin(options?: {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.end(JSON.stringify(data));
   }
+
+  function runPythonRunner(args: string[], res: ServerResponse, origin: string | undefined, timeoutErrorMessage: string) {
+    const startTime = Date.now();
+    let stdout = '';
+    let stderr = '';
+    let finished = false;
+
+    const child = spawn(pythonPath, args, {
+      cwd: scraperDir,
+      env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONPATH: 'scraper', MENU_DB: dbPath },
+    });
+
+    const timeoutTimer = setTimeout(() => {
+      if (!finished) {
+        finished = true;
+        concurrencyLimiter.release();
+        try {
+          child.kill('SIGTERM');
+          setTimeout(() => {
+            try { child.kill('SIGKILL'); } catch { /* ignore */ }
+          }, 3000);
+        } catch { /* ignore */ }
+        sendJson(res, 504, { success: false, error: timeoutErrorMessage }, origin);
+      }
+    }, SCRAPER_TIMEOUT_MS);
+
+    child.stdout.on('data', (data) => { stdout += data.toString(); });
+    child.stderr.on('data', (data) => { stderr += data.toString(); });
+
+    child.on('error', (err) => {
+      clearTimeout(timeoutTimer);
+      if (!finished) {
+        finished = true;
+        concurrencyLimiter.release();
+        sendJson(res, 500, { success: false, error: `Process failure: ${err.message}` }, origin);
+      }
+    });
+
+    child.on('close', (code) => {
+      clearTimeout(timeoutTimer);
+      if (finished) return;
+      finished = true;
+      concurrencyLimiter.release();
+
+      const elapsedMs = Date.now() - startTime;
+      if (code !== 0 && !stdout.trim()) {
+        sendJson(
+          res,
+          500,
+          { success: false, error: stderr || `Scraper process exited with code ${code}`, elapsedMs },
+          origin
+        );
+        return;
+      }
+
+      try {
+        const jsonMatch = stdout.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          sendJson(res, 200, { ...JSON.parse(jsonMatch[0]), elapsedMs }, origin);
+        } else {
+          sendJson(
+            res,
+            200,
+            { success: code === 0, error: 'Failed to extract JSON result from scraper output.', elapsedMs },
+            origin
+          );
+        }
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Output parsing error';
+        sendJson(res, 500, { success: false, error: `Failed to parse scraper output: ${message}`, elapsedMs }, origin);
+      }
+    });
+  }
+
 
   function readBody<T = unknown>(req: IncomingMessage): Promise<T> {
     return new Promise((resolve, reject) => {
@@ -541,98 +616,10 @@ export function apiPlugin(options?: {
               args.push('--render');
             }
 
-            const startTime = Date.now();
-            let stdout = '';
-            let stderr = '';
-            let finished = false;
-
-            const child = spawn(pythonPath, args, {
-              cwd: scraperDir,
-              env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONPATH: 'scraper' },
-            });
-
-            // Process Timeout Guard
-            const timeoutTimer = setTimeout(() => {
-              if (!finished) {
-                finished = true;
-                concurrencyLimiter.release();
-                try {
-                  child.kill('SIGTERM');
-                  setTimeout(() => {
-                    try { child.kill('SIGKILL'); } catch { /* ignore */ }
-                  }, 3000);
-                } catch { /* ignore */ }
-                sendJson(
-                  res,
-                  504,
-                  { success: false, error: 'Scraper execution timed out after 90 seconds.' },
-                  origin
-                );
-              }
-            }, SCRAPER_TIMEOUT_MS);
-
-            child.stdout.on('data', (data) => {
-              stdout += data.toString();
-            });
-
-            child.stderr.on('data', (data) => {
-              stderr += data.toString();
-            });
-
-            child.on('error', (err) => {
-              clearTimeout(timeoutTimer);
-              if (!finished) {
-                finished = true;
-                concurrencyLimiter.release();
-                sendJson(res, 500, { success: false, error: `Process failure: ${err.message}` }, origin);
-              }
-            });
-
-            child.on('close', (code) => {
-              clearTimeout(timeoutTimer);
-              if (finished) return;
-              finished = true;
-              concurrencyLimiter.release();
-
-              const elapsedMs = Date.now() - startTime;
-              if (code !== 0 && !stdout.trim()) {
-                sendJson(
-                  res,
-                  500,
-                  {
-                    success: false,
-                    error: stderr || `Scraper process exited with code ${code}`,
-                    elapsedMs,
-                  },
-                  origin
-                );
-                return;
-              }
-
-              try {
-                const jsonMatch = stdout.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                  const result = JSON.parse(jsonMatch[0]);
-                  sendJson(res, 200, { ...result, elapsedMs }, origin);
-                } else {
-                  sendJson(
-                    res,
-                    200,
-                    {
-                      success: false,
-                      error: 'Failed to extract JSON result from scraper output.',
-                      elapsedMs,
-                    },
-                    origin
-                  );
-                }
-              } catch (e: unknown) {
-                const message = e instanceof Error ? e.message : 'Output parsing error';
-                sendJson(res, 500, { success: false, error: `Failed to parse scraper output: ${message}`, elapsedMs }, origin);
-              }
-            });
+            runPythonRunner(args, res, origin, 'Scraper execution timed out after 90 seconds.');
             return;
           }
+
 
           // ------------------------------------------------------------------
           // POST /api/update-restaurant
@@ -880,57 +867,15 @@ export function apiPlugin(options?: {
               return;
             }
 
-            let finished = false;
-            const child = spawn(pythonPath, ['-m', 'scraper.runner', '--sync-firebase'], {
-              cwd: scraperDir,
-              env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONPATH: 'scraper' },
-            });
-
-            const syncTimeout = setTimeout(() => {
-              if (!finished) {
-                finished = true;
-                concurrencyLimiter.release();
-                try {
-                  child.kill('SIGTERM');
-                  setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* ignore */ } }, 3000);
-                } catch { /* ignore */ }
-                sendJson(res, 504, { success: false, error: 'Firebase sync timed out after 90 seconds.' }, origin);
-              }
-            }, SCRAPER_TIMEOUT_MS);
-
-            let stdout = '';
-            let stderr = '';
-            child.stdout.on('data', (d) => { stdout += d.toString(); });
-            child.stderr.on('data', (d) => { stderr += d.toString(); });
-
-            child.on('error', (err) => {
-              clearTimeout(syncTimeout);
-              if (!finished) {
-                finished = true;
-                concurrencyLimiter.release();
-                sendJson(res, 500, { success: false, error: `Sync process error: ${err.message}` }, origin);
-              }
-            });
-
-            child.on('close', (code) => {
-              clearTimeout(syncTimeout);
-              if (finished) return;
-              finished = true;
-              concurrencyLimiter.release();
-
-              try {
-                const match = stdout.match(/\{[\s\S]*\}/);
-                if (match) {
-                  sendJson(res, 200, JSON.parse(match[0]), origin);
-                } else {
-                  sendJson(res, 200, { success: code === 0, rawStdout: stdout, rawStderr: stderr }, origin);
-                }
-              } catch {
-                sendJson(res, 500, { success: false, error: stderr || stdout || 'Sync failed.' }, origin);
-              }
-            });
+            runPythonRunner(
+              ['-m', 'scraper.runner', '--sync-firebase'],
+              res,
+              origin,
+              'Firebase sync timed out after 90 seconds.'
+            );
             return;
           }
+
 
           sendJson(res, 404, { success: false, error: 'API route not found' }, origin);
         } catch (err: unknown) {

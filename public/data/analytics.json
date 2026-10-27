@@ -1,7 +1,7 @@
 {
   "success": true,
   "kpi": {
-    "totalRestaurants": 30,
+    "totalRestaurants": 25,
     "scrapedRestaurants": 6,
     "totalItems": 1127,
     "avgPrice": 13.24,

@@ -227,11 +227,5 @@ for (const item of exportItems) {
 
 fs.writeFileSync(path.join(outDir, 'menu_items.csv'), csvLines.join('\n'));
 console.log(`Saved ${exportItems.length} records to menu_items.csv`);
-
-// 5. Firebase status for static build
-fs.writeFileSync(
-  path.join(outDir, 'firebase_status.json'),
-  JSON.stringify({ success: true, configured: true, projectId: 'restaurantdatascraper' }, null, 2)
-);
-
 console.log('Static export complete!');
+

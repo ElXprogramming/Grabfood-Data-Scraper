@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
 
+from .security import sanitize_csv_cell
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS restaurants (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -227,9 +229,6 @@ def set_fields(conn, restaurant_id: int, **fields):
     conn.commit()
 
 
-from .security import sanitize_csv_cell
-
-
 def export(conn, out_dir: Path) -> dict:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -237,11 +236,12 @@ def export(conn, out_dir: Path) -> dict:
         "SELECT r.name AS restaurant, r.area, r.cuisine, r.rating, r.opening_hours, r.address, r.lat, r.lon, r.website,"
         " m.category, m.name AS item, m.description, m.price, m.currency, m.source, m.source_url, m.scraped_at"
         " FROM menu_items m JOIN restaurants r ON r.id=m.restaurant_id ORDER BY r.name, m.category, m.name")]
-    
+
     # Sanitize each field against CSV Formula Injection (=, +, -, @)
-    sanitized_rows = []
-    for r in raw_rows:
-        sanitized_rows.append({k: sanitize_csv_cell(v) if isinstance(v, str) else v for k, v in r.items()})
+    sanitized_rows = [
+        {k: sanitize_csv_cell(v) if isinstance(v, str) else v for k, v in r.items()}
+        for r in raw_rows
+    ]
 
     with open(out_dir / "menu_items.csv", "w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, fieldnames=list(raw_rows[0].keys()) if raw_rows else ["restaurant"])
@@ -253,5 +253,6 @@ def export(conn, out_dir: Path) -> dict:
             "SELECT category,name,description,price,currency,source FROM menu_items WHERE restaurant_id=?",
             (r["id"],))]
     (out_dir / "restaurants.json").write_text(json.dumps(rests, indent=2, ensure_ascii=False), encoding="utf-8")
-    return {"menu_items": len(rows), "restaurants": len(rests)}
+    return {"menu_items": len(raw_rows), "restaurants": len(rests)}
+
 

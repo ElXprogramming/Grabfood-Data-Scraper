@@ -68,21 +68,14 @@ export interface CategoryStat {
   max_price: number;
 }
 
-export interface RestaurantStat {
-  id: number;
-  name: string;
-  area: string | null;
-  cuisine: string | null;
-  rating: number | null;
-  opening_hours: string | null;
-  address: string | null;
-  lat: number | null;
-  lon: number | null;
-  item_count: number;
+export type RestaurantStat = Omit<
+  Restaurant,
+  'website' | 'grab_url' | 'foodpanda_url' | 'avg_price' | 'min_price' | 'max_price'
+> & {
   avg_price: number;
   min_price: number;
   max_price: number;
-}
+};
 
 export interface KeywordStat {
   word: string;
@@ -133,5 +126,5 @@ export interface ScrapeResult {
   socials?: Record<string, string>;
   error?: string;
   elapsedMs?: number;
-  rawStderr?: string;
 }
+

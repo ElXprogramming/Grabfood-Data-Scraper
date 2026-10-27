@@ -248,115 +248,6 @@ def cmd_scrape(
     }
 
 
-def cmd_list_discovered() -> dict:
-    conn = db.connect(config.DB_PATH)
-    rows = conn.execute("""
-        SELECT r.id, r.name, r.area, r.website, r.grab_url, r.foodpanda_url,
-               r.cuisine, r.rating, r.opening_hours, r.address, r.lat, r.lon,
-               COUNT(m.id) as item_count
-        FROM restaurants r
-        LEFT JOIN menu_items m ON r.id = m.restaurant_id
-        GROUP BY r.id
-        ORDER BY item_count DESC, r.name ASC
-    """).fetchall()
-
-    restaurants = [
-        {
-            "id": r["id"],
-            "name": r["name"],
-            "area": r["area"] or "Alamesra / 1Borneo",
-            "website": r["website"],
-            "grab_url": r["grab_url"],
-            "foodpanda_url": r["foodpanda_url"],
-            "cuisine": r["cuisine"],
-            "rating": r["rating"],
-            "openingHours": r["opening_hours"],
-            "address": r["address"],
-            "lat": r["lat"],
-            "lon": r["lon"],
-            "itemCount": r["item_count"],
-            "hasScrapedData": r["item_count"] > 0,
-        }
-        for r in rows
-    ]
-    return {"success": True, "restaurants": restaurants, "total": len(restaurants)}
-
-
-def cmd_get_discovered_items(restaurant_id: int) -> dict:
-    conn = db.connect(config.DB_PATH)
-    r = conn.execute("SELECT * FROM restaurants WHERE id = ?", (restaurant_id,)).fetchone()
-    if not r:
-        return {"success": False, "error": f"Restaurant {restaurant_id} not found"}
-
-    rows = conn.execute("""
-        SELECT id, category, name, description, price, currency, source, source_url
-        FROM menu_items
-        WHERE restaurant_id = ?
-        ORDER BY category, name
-    """, (restaurant_id,)).fetchall()
-
-    items = [
-        {
-            "name": row["name"],
-            "price": row["price"],
-            "category": row["category"] or "General",
-            "description": row["description"] or "",
-            "currency": row["currency"] or "MYR",
-            "source": row["source"],
-        }
-        for row in rows
-    ]
-
-    return {
-        "success": True,
-        "restaurant": {
-            "id": r["id"],
-            "name": r["name"],
-            "area": r["area"],
-            "website": r["website"],
-            "grab_url": r["grab_url"],
-            "foodpanda_url": r["foodpanda_url"],
-        },
-        "itemsCount": len(items),
-        "items": items,
-    }
-
-
-def cmd_sync_all_discovered() -> dict:
-    conn = db.connect(config.DB_PATH)
-    rows = conn.execute("""
-        SELECT r.id, r.name, r.area, r.website, r.grab_url, r.foodpanda_url
-        FROM restaurants r
-        WHERE r.id IN (SELECT DISTINCT restaurant_id FROM menu_items)
-    """).fetchall()
-
-    result = []
-    for r in rows:
-        items = conn.execute("""
-            SELECT category, name, description, price, currency, source
-            FROM menu_items
-            WHERE restaurant_id = ?
-            ORDER BY category, name
-        """, (r["id"],)).fetchall()
-
-        result.append({
-            "name": r["name"],
-            "area": r["area"] or "Alamesra / 1Borneo",
-            "website": r["website"] or r["grab_url"] or r["foodpanda_url"] or "",
-            "items": [
-                {
-                    "name": i["name"],
-                    "price": i["price"],
-                    "category": i["category"] or "General",
-                    "description": i["description"] or "",
-                }
-                for i in items
-            ]
-        })
-
-    return {"success": True, "restaurants": result, "totalRestaurants": len(result)}
-
-
 def main():
     parser = argparse.ArgumentParser(description="Menu Scraper CLI Runner")
     parser.add_argument("--url", help="URL to scrape")
@@ -369,24 +260,11 @@ def main():
     parser.add_argument("--lon", type=float, help="Longitude")
     parser.add_argument("--area", help="District or neighborhood (e.g. 1borneo, alamesra)")
     parser.add_argument("--render", action="store_true", help="Use headless Chromium for website")
-    parser.add_argument("--list-discovered", action="store_true", help="List discovered restaurants from SQLite DB")
-    parser.add_argument("--get-discovered-items", action="store_true", help="Get menu items for a discovered restaurant")
-    parser.add_argument("--restaurant-id", type=int, help="Restaurant ID for --get-discovered-items")
-    parser.add_argument("--sync-all-discovered", action="store_true", help="Export all pre-scraped restaurant menus")
     parser.add_argument("--sync-firebase", action="store_true", help="Sync all SQLite data to Firebase Cloud Firestore")
 
     args = parser.parse_args()
 
-    if args.list_discovered:
-        res = cmd_list_discovered()
-    elif args.get_discovered_items:
-        if not args.restaurant_id:
-            res = {"success": False, "error": "--restaurant-id is required with --get-discovered-items"}
-        else:
-            res = cmd_get_discovered_items(args.restaurant_id)
-    elif args.sync_all_discovered:
-        res = cmd_sync_all_discovered()
-    elif args.sync_firebase:
+    if args.sync_firebase:
         from .firebase_db import sync_sqlite_to_firestore
         res = sync_sqlite_to_firestore(config.DB_PATH)
     elif args.url:
@@ -403,10 +281,11 @@ def main():
             render=args.render,
         )
     else:
-        res = {"success": False, "error": "No valid action specified. Use --url, --list-discovered, or --sync-all-discovered."}
+        res = {"success": False, "error": "No valid action specified. Use --url or --sync-firebase."}
 
     print(json.dumps(res))
 
 
 if __name__ == "__main__":
     main()
+

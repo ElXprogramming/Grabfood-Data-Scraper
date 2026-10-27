@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import logging
 import os
+import re
+import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -14,7 +16,6 @@ from firebase_admin import credentials, firestore
 
 logger = logging.getLogger("scraper.firebase")
 
-_app: Optional[firebase_admin.App] = None
 _db: Optional[Any] = None
 
 CREDENTIAL_CANDIDATE_PATHS = [
@@ -27,7 +28,7 @@ CREDENTIAL_CANDIDATE_PATHS = [
 
 def get_firestore_client() -> Optional[Any]:
     """Initialize and return the Firestore client singleton."""
-    global _app, _db
+    global _db
     if _db is not None:
         return _db
 
@@ -50,15 +51,14 @@ def get_firestore_client() -> Optional[Any]:
     try:
         if not firebase_admin._apps:
             cred = credentials.Certificate(str(cred_file))
-            _app = firebase_admin.initialize_app(cred)
-        else:
-            _app = firebase_admin.get_app()
+            firebase_admin.initialize_app(cred)
 
         _db = firestore.client()
         return _db
     except Exception as e:
         logger.warning(f"Failed to initialize Firebase Admin SDK: {e}")
         return None
+
 
 
 def sync_restaurant_to_firestore(record: Dict[str, Any], restaurant_id: Optional[int] = None) -> Optional[str]:
@@ -155,8 +155,6 @@ def sync_menu_items_to_firestore(
 
 def sync_sqlite_to_firestore(db_path: Path) -> Dict[str, Any]:
     """One-shot utility to migrate or sync all restaurants and dishes from SQLite to Firestore."""
-    import sqlite3
-
     db = get_firestore_client()
     if not db:
         return {"success": False, "error": "Firestore is not connected."}
@@ -196,7 +194,7 @@ def sync_sqlite_to_firestore(db_path: Path) -> Dict[str, Any]:
 
 
 def _slugify(text: str) -> str:
-    import re
     text = text.lower().strip()
     text = re.sub(r"[^\w\s-]", "", text)
     return re.sub(r"[-\s]+", "-", text)[:60]
+
