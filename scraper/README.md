@@ -54,10 +54,10 @@ python -m scraper add-link "Sushi King" https://food.grab.com/my/en/restaurant/.
 python -m scraper delivery --only "Sushi"
 python -m scraper stats
 python -m scraper export                         # exports/menu_items.csv + restaurants.json
-pytest                                           # offline tests
+PYTHONPATH=. pytest tests                        # run offline pytest suite (or: npm run test:python)
 ```
 
-Re-running is safe: restaurants are merged (fuzzy name + <120 m) and a source's menu items are replaced, not duplicated.
+Re-running is safe: restaurants are merged (fuzzy name + <120 m) and a source's menu items are replaced, not duplicated. Scrapers can also be triggered interactively from the web UI (`npm run dev`).
 
 ## Responsible scraping
 

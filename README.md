@@ -7,6 +7,9 @@
 [![Playwright](https://img.shields.io/badge/Playwright-Chromium-45ba4b?logo=playwright&logoColor=white)](https://playwright.dev/)
 [![SQLite](https://img.shields.io/badge/SQLite-3-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![Firebase](https://img.shields.io/badge/Firebase-Firestore-FFCA28?logo=firebase&logoColor=black)](https://firebase.google.com/)
+[![Tests](https://img.shields.io/badge/Tests-47%20Passing-brightgreen?logo=pytest&logoColor=white)](https://github.com/ElXprogramming/Grabfood-Data-Scraper)
+[![Security](https://img.shields.io/badge/Security-Multi--Tier%20Hardened-blueviolet?logo=shield&logoColor=white)](https://github.com/ElXprogramming/Grabfood-Data-Scraper)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > **An end-to-end restaurant venue discovery, headless delivery & web menu extraction engine, and computational data mining laboratory.**
 
@@ -22,10 +25,11 @@ A high-performance restaurant intelligence platform engineered to map local dini
   - [The 5-Stage Scraping & Intelligence Pipeline](#the-5-stage-scraping--intelligence-pipeline)
   - [Fuzzy Deduplication & Spatial Normalization](#fuzzy-deduplication--spatial-normalization)
   - [Hybrid Storage & Cloud Synchronization](#hybrid-storage--cloud-synchronization)
-- [GrabFood Scraper: Architecture & Full Source Code](#grabfood-scraper-architecture--full-source-code)
+- [GrabFood Scraper: Architecture & Implementation](#grabfood-scraper-architecture--implementation)
+  - [Why Traditional HTML Scraping Fails on GrabFood](#why-traditional-html-scraping-fails-on-grabfood)
   - [Headless Network Sniffing Mechanics](#headless-network-sniffing-mechanics)
-  - [Full Source Code: Delivery & Catalog Extractor (`extract_delivery.py`)](#full-source-code-delivery--catalog-extractor-extract_deliverypy)
-  - [Full Source Code: Playwright Chromium Sniffer (`browser.py`)](#full-source-code-playwright-chromium-sniffer-browserpy)
+  - [Key Implementation Highlights](#key-implementation-highlights)
+  - [Complete Source Code Inspection](#complete-source-code-inspection)
   - [GrabFood Scraping CLI & Tests](#grabfood-scraping-cli--tests)
 - [Technologies Used](#technologies-used)
   - [Frontend Layer](#frontend-layer)
@@ -41,26 +45,38 @@ A high-performance restaurant intelligence platform engineered to map local dini
   - [2. Configure Python Scraper Virtual Environment](#2-configure-python-scraper-virtual-environment)
   - [3. Configure Environment Variables](#3-configure-environment-variables)
   - [4. Launch the Development Server](#4-launch-the-development-server)
+  - [5. Production Build & Static Deployment](#5-production-build--static-deployment)
 - [CLI Scraper Usage (Standalone Execution)](#cli-scraper-usage-standalone-execution)
 - [REST API Reference](#rest-api-reference)
-- [Ethical Scraping & Rate Limiting Guidelines](#ethical-scraping--rate-limiting-guidelines)
+- [Security Architecture & Rate Limiting Controls](#security-architecture--rate-limiting-controls)
+  - [1. Multi-Tiered Rate Limiting & Concurrency Controls](#1-multi-tiered-rate-limiting--concurrency-controls)
+  - [2. Server-Side Request Forgery (SSRF) Defense](#2-server-side-request-forgery-ssrf-defense)
+  - [3. CLI Argument & Command Injection Defense](#3-cli-argument--command-injection-defense)
+  - [4. Payload Size Limits & DoS Prevention](#4-payload-size-limits--dos-prevention)
+  - [5. CSV Formula Injection (DDE) Neutralization](#5-csv-formula-injection-dde-neutralization)
+  - [6. Defensive HTTP Security Headers](#6-defensive-http-security-headers)
+  - [7. Automated Security Test Suites](#7-automated-security-test-suites)
+- [License](#license)
 
 ---
 
 ## Key Features
 
-- **Multi-Source Discovery Engine**: Automatically locates food establishments across target geographic coordinates using OpenStreetMap (Overpass API) and Google Places API (New Text Search).
+- **Four Integrated Web Workspaces**:
+  - **Scraper Studio**: Interactive runner supporting real-time URL execution, preset sample links, manual venue link association, custom parameter overrides (rating, cuisine, coordinates, opening hours), and live streaming execution logs.
+  - **Analytics Dashboard**: Instant faceted dataset exploration with search, multi-field filtering (category, cuisine, rating, price thresholds, district), sorting, KPI summaries, and one-click CSV/JSON exports.
+  - **Data Mining Lab**:
+    - **Outlier & Anomaly Mining**: Dynamic Interquartile Range (IQR) boxplot threshold calculation and pricing anomaly detection.
+    - **Culinary NLP & Text Mining**: Multi-lingual tokenization, stopword filtering, and frequency analysis of menu keywords and flavor profiles.
+    - **Market Basket Analysis**: Support and confidence estimation for combo items and cross-category ordering patterns.
+    - **Econometric Price Distributions**: Dynamic histogram binning, variance, and standard deviation calculations.
+  - **System Architecture Viewer**: Interactive topology diagrams, passive network sniffing breakdowns, and direct code viewer with one-click copy.
 - **Headless Delivery Platform Extractor**: Collects menus from delivery applications (GrabFood, foodpanda) using Playwright Chromium headless network interception to extract structured menu data without private API bypasses.
+- **Multi-Source Discovery Engine**: Automatically locates food establishments across target geographic coordinates using OpenStreetMap (Overpass API) and Google Places API (New Text Search).
 - **Smart Website Parser**: Extracts menus directly from restaurant websites using schema.org `JSON-LD` microdata, regular expressions for price matching (`RM XX.XX`), and text extraction from downloadable PDF menus (`pypdf`).
 - **Geospatial & Fuzzy Deduplication**: Merges multi-source entries into a single restaurant entity using Haversine distance (<120m threshold) combined with Levenshtein/`SequenceMatcher` string similarity matching.
-- **Scraper Studio**: Interactive web console with quick presets, custom parameter injection (cuisine, rating, coordinates, opening hours), live terminal execution logs, and manual venue link mapping.
-- **Analytics & Dataset Filtering**: Search, filter, and sort menu items across restaurants, categories, cuisines, and price ranges with instant KPI summary cards.
-- **Data Mining Lab**:
-  - **Outlier & Anomaly Mining**: Dynamic Interquartile Range (IQR) boxplot calculation and anomaly detection.
-  - **Culinary NLP & Text Mining**: Tokenization, stopword filtering, and frequency analysis of menu keywords.
-  - **Market Basket Analysis**: Support and confidence estimation for combo items and cross-category ordering patterns.
-  - **Price Distribution & Econometric Modeling**: Dynamic price histogram binning, variance, and standard deviation calculations.
-- **One-Click Export & Cloud Sync**: Instant CSV/JSON dataset downloads and Google Cloud Firestore database synchronization via Firebase Admin SDK.
+- **Hybrid Storage & Cloud Sync**: Local offline-first relational persistence with SQLite 3 (`menus.db`) and on-demand cloud synchronization with Google Cloud Firestore via Firebase Admin SDK.
+- **Dual Deployment Modes**: Full-stack dynamic mode (Node.js API + SQLite + Python) and static production mode (pre-exported JSON/CSV dataset with zero-backend client fallback on Netlify).
 
 ---
 
@@ -71,37 +87,39 @@ A high-performance restaurant intelligence platform engineered to map local dini
 The system operates as a unified full-stack application. A React + TypeScript single-page application (SPA) communicates with an embedded Node.js API middleware inside Vite. When scraping operations are triggered from the UI, the Node API spawns isolated Python worker processes that execute headless Chromium sessions or polite HTTP crawlers, writes updates to SQLite (`menus.db`), and optionally syncs with Google Cloud Firestore.
 
 ```
-+-----------------------------------------------------------------------------------+
-|                                  USER BROWSER                                     |
-|           [Scraper Studio]    [Analytics Dashboard]    [Data Mining Lab]          |
-+-----------------------------------------+-----------------------------------------+
-                                          | HTTP / JSON REST APIs
-                                          v
-+-----------------------------------------------------------------------------------+
-|                        VITE API MIDDLEWARE (Node.js)                              |
-|   /api/restaurants  |  /api/items  |  /api/analytics  |  /api/scrape  |  /api/sync|
-+------------------------------------+----------------------------------------------+
-                                     |
-            +------------------------+------------------------+
-            | Reads / Writes SQL                              | Spawns Worker Process
-            v                                                 v
-+--------------------------+                       +--------------------------------+
-|  SQLite DB (menus.db)    |                       |      PYTHON SCRAPER RUNNER     |
-| - restaurants            |                       | - runner.py / cli.py           |
-| - menu_items             |<----------------------+ - extract_delivery.py          |
-| - menu_assets            |   Atomic Transactions | - extract_website.py           |
-| - scrape_log             |                       | - discovery.py                 |
-+--------------------------+                       +----------------+---------------+
-            ^                                                       |
-            | Real-Time Cloud Sync                                  | Headless Browser / HTTP
-            v                                                       v
-+--------------------------+                       +--------------------------------+
-|  Google Cloud Firestore  |                       | TARGET WEBSITES & PLATFORMS    |
-| (restaurantdatascraper)  |                       | - GrabFood / foodpanda Pages   |
-+--------------------------+                       | - Official Restaurant Sites    |
-                                                   | - OpenStreetMap / Overpass API |
-                                                   | - Google Places API            |
-                                                   +--------------------------------+
++-------------------------------------------------------------------------------------------------+
+|                                          USER BROWSER                                           |
+|    [Scraper Studio]    [Analytics Dashboard]    [Data Mining Lab]    [Architecture Viewer]      |
++-----------------------------------------------+-------------------------------------------------+
+                                                | HTTP / JSON REST APIs
+                                                v
++-------------------------------------------------------------------------------------------------+
+|                                 VITE API MIDDLEWARE (Node.js)                                   |
+|   /api/restaurants  |  /api/items  |  /api/analytics  |  /api/scrape  |  /api/export  |  /sync  |
++---------------------------------------+---------------------------------------------------------+
+                                        |
+              +-------------------------+-------------------------+
+              | Reads / Writes SQL                                | Spawns Worker Process
+              v                                                   v
++---------------------------+                         +-----------------------------------+
+|   SQLite DB (menus.db)    |                         |       PYTHON SCRAPER RUNNER       |
+| - restaurants             |                         | - runner.py / cli.py              |
+| - menu_items              |<------------------------+ - extract_delivery.py             |
+| - menu_assets             |   Atomic Transactions   | - extract_website.py              |
+| - scrape_log              |                         | - discovery.py                    |
++---------------------------+                         +-----------------+-----------------+
+              ^                                                         |
+              | Real-Time Cloud Sync                                    | Headless Browser / HTTP
+              v                                                         v
++---------------------------+                         +-----------------------------------+
+|  Google Cloud Firestore   |                         |    TARGET WEBSITES & PLATFORMS    |
+|  (restaurantdatascraper)  |                         | - GrabFood / foodpanda Pages      |
++---------------------------+                         | - Official Restaurant Sites       |
+              ^                                       | - OpenStreetMap / Overpass API    |
+              | Static Build Pre-export               | - Google Places API               |
++-------------+-------------+                         +-----------------------------------+
+| public/data/*.json / CSV  | (Client Fallback for Netlify / Static Hosting)
++---------------------------+
 ```
 
 ---
@@ -130,6 +148,7 @@ The system operates as a unified full-stack application. A React + TypeScript si
 - `vite-plugin-api.ts` intercepts `/api/*` HTTP calls directly in the Vite development and preview server.
 - Uses Node.js native `node:sqlite` (`DatabaseSync`) for zero-overhead, synchronous SQL queries.
 - Dynamically executes Python CLI tasks via `child_process.spawn`, piping structured stdout JSON back to the frontend.
+- Guards endpoints with multi-tier rate limiting and security policies (`vite-security.ts`).
 
 #### 5. Analytics & Computational Data Mining Stage
 - Raw database records are aggregated into actionable business intelligence:
@@ -165,12 +184,12 @@ Restaurants often appear under slightly different names across different service
   - Authenticated through Google Cloud Service Account credentials (`GOOGLE_APPLICATION_CREDENTIALS` or `credentials/serviceAccountKey.json`).
   - Synchronized on demand from the Scraper Studio UI or via CLI:
     ```bash
-    python -m scraper.runner --sync-firebase
+    PYTHONPATH=scraper scraper/.venv/bin/python -m scraper.runner --sync-firebase
     ```
 
 ---
 
-## GrabFood Scraper: Architecture & Full Source Code
+## GrabFood Scraper: Architecture & Implementation
 
 The GrabFood scraper is engineered to extract full restaurant menus, categorizations, pricing, and establishment metadata from GrabFood storefronts (`https://food.grab.com/my/en/restaurant/...`).
 
@@ -223,9 +242,157 @@ To overcome these obstacles without brittle DOM selectors or reverse-engineering
 
 ---
 
-### Full Source Code: Delivery & Catalog Extractor (`extract_delivery.py`)
+### Key Implementation Highlights
 
-**File Path:** [`scraper/scraper/extract_delivery.py`](scraper/scraper/extract_delivery.py)
+#### 1. Playwright Headless Browser Sniffer (`browser.py`)
+Spoofs Malaysian coordinates to bypass GrabFood's delivery barrier and passively collects all background JSON payloads:
+
+```python
+def capture(url: str, wait_ms: int = 4000):
+    """Load `url` in Chromium, inject regional coordinates, and sniff background JSON."""
+    payloads = []
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        try:
+            ctx = browser.new_context(
+                user_agent=config.USER_AGENT,
+                locale="en-MY",
+                geolocation={"latitude": 6.0360, "longitude": 116.1297},
+                permissions=["geolocation"],
+            )
+            page = ctx.new_page()
+
+            def on_response(resp):
+                try:
+                    if "json" in (resp.headers.get("content-type") or "") and resp.status == 200:
+                        payloads.append(resp.json())
+                except Exception:
+                    pass
+
+            page.on("response", on_response)
+            page.goto(url, wait_until="domcontentloaded", timeout=45000)
+            page.wait_for_timeout(wait_ms)
+            html = page.content()
+        finally:
+            browser.close()
+    return html, payloads
+```
+
+#### 2. Recursive Catalog Tree Walker & Price Normalization (`extract_delivery.py`)
+Recursively walks nested JSON data structures regardless of variations between GrabFood and foodpanda, normalizing minor units (cents) to Malaysian Ringgit:
+
+```python
+PRICE_KEYS = (
+    ("discountedPrice", 1),
+    ("discount_price", 1),
+    ("priceInMinorUnit", 100),    # GrabFood uses minor units (cents)
+    ("price_in_minor_unit", 100),
+    ("price", 1),
+    ("displayPrice", 1),
+)
+
+def _to_price(d: Dict[str, Any]) -> Optional[float]:
+    """Extract and normalize numerical price, converting cents to Ringgit (MYR)."""
+    for key, div in PRICE_KEYS:
+        v = d.get(key)
+        if isinstance(v, dict):
+            v = v.get("amount") or v.get("value") or v.get("price")
+        if isinstance(v, str):
+            v = "".join(c for c in v if c.isdigit() or c == ".") or None
+        try:
+            f = float(v) / div
+            if 0 < f < 2000:
+                return round(f, 2)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+def _walk(node: Any, category: Optional[str], out: List[Dict[str, Any]]) -> None:
+    """Recursively walk payload JSON nodes to collect categorized menu items."""
+    if isinstance(node, list):
+        for n in node:
+            _walk(n, category, out)
+    elif isinstance(node, dict):
+        children = next((node[k] for k in CHILD_KEYS if isinstance(node.get(k), list)), None)
+        if children is not None:
+            cat_name = _name(node)
+            current_cat = cat_name if cat_name and cat_name.lower() not in ("menu", "categories") else category
+            for c in children:
+                _walk(c, current_cat, out)
+        else:
+            name, price = _name(node), _to_price(node)
+            if name and price is not None:
+                desc = next((str(node[k]).strip() for k in DESC_KEYS if isinstance(node.get(k), str) and node[k].strip()), None)
+                out.append({
+                    "category": category or "General",
+                    "name": name,
+                    "description": desc,
+                    "price": price,
+                    "currency": "MYR",
+                })
+```
+
+---
+
+### Complete Source Code Inspection
+
+The complete, unmodified Python extractor and headless browser modules are available in the repository:
+- **Catalog & Metadata Extractor**: [`scraper/scraper/extract_delivery.py`](scraper/scraper/extract_delivery.py)
+- **Playwright Headless Browser Sniffer**: [`scraper/scraper/browser.py`](scraper/scraper/browser.py)
+- **Interactive UI Architecture Viewer**: Available directly in the web app under the **System Architecture** tab (`src/components/TechArchitecture.tsx`).
+
+<details>
+<summary><b>🔍 Click to expand full source code of <code>browser.py</code> (43 lines)</b></summary>
+
+```python
+"""Headless-browser helper (Playwright). Used for JS-rendered sites and delivery apps.
+
+Setup once:  pip install playwright && playwright install chromium
+"""
+from . import config
+
+
+def capture(url: str, wait_ms: int = 4000):
+    """Load `url` in Chromium. Returns (rendered_html, [json_payloads]) where the payloads are
+    every JSON response the page fetched in the background - menus usually travel this way."""
+    from playwright.sync_api import sync_playwright
+
+    payloads = []
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        try:
+            ctx = browser.new_context(
+                user_agent=config.USER_AGENT,
+                locale="en-MY",
+                geolocation={"latitude": 6.0360, "longitude": 116.1297},
+                permissions=["geolocation"],
+            )
+            page = ctx.new_page()
+
+            def on_response(resp):
+                try:
+                    if "json" in (resp.headers.get("content-type") or "") and resp.status == 200:
+                        payloads.append(resp.json())
+                except Exception:
+                    pass
+
+            page.on("response", on_response)
+            page.goto(url, wait_until="domcontentloaded", timeout=45000)
+            try:
+                page.wait_for_load_state("networkidle", timeout=12000)
+            except Exception:
+                pass
+            page.wait_for_timeout(wait_ms)
+            html = page.content()
+        finally:
+            browser.close()
+    return html, payloads
+```
+
+</details>
+
+<details>
+<summary><b>🔍 Click to expand full source code of <code>extract_delivery.py</code> (367 lines)</b></summary>
 
 ```python
 """Stage 2b - Extractor for delivery-platform pages (GrabFood, Foodpanda).
@@ -240,7 +407,10 @@ import json
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
+from bs4 import BeautifulSoup
+
 from .browser import capture
+
 
 NAME_KEYS = ("name", "title", "itemName", "item_name", "productName", "dishName")
 DESC_KEYS = ("description", "desc", "itemDescription", "item_description", "summary")
@@ -303,7 +473,6 @@ def _walk(node: Any, category: Optional[str], out: List[Dict[str, Any]]) -> None
     elif isinstance(node, dict):
         children = next((node[k] for k in CHILD_KEYS if isinstance(node.get(k), list)), None)
         if children is not None:
-            # Category container node
             cat_name = _name(node)
             current_cat = cat_name if cat_name and cat_name.lower() not in ("menu", "categories") else category
             for c in children:
@@ -338,7 +507,6 @@ def _extract_meta_from_jsonld(html: str) -> Dict[str, Any]:
         return meta
 
     try:
-        from bs4 import BeautifulSoup
         soup = BeautifulSoup(html, "html.parser")
         for s in soup.find_all("script", type="application/ld+json"):
             try:
@@ -580,7 +748,6 @@ def scrape_delivery(url: str, return_meta: bool = False):
     # Check for embedded Next.js or JSON state in HTML
     if html:
         try:
-            from bs4 import BeautifulSoup
             soup = BeautifulSoup(html, "html.parser")
             next_tag = soup.find("script", id="__NEXT_DATA__")
             if next_tag and next_tag.string:
@@ -595,56 +762,7 @@ def scrape_delivery(url: str, return_meta: bool = False):
     return items
 ```
 
----
-
-### Full Source Code: Playwright Chromium Sniffer (`browser.py`)
-
-**File Path:** [`scraper/scraper/browser.py`](scraper/scraper/browser.py)
-
-```python
-"""Headless-browser helper (Playwright). Used for JS-rendered sites and delivery apps.
-
-Setup once:  pip install playwright && playwright install chromium
-"""
-from . import config
-
-
-def capture(url: str, wait_ms: int = 4000):
-    """Load `url` in Chromium. Returns (rendered_html, [json_payloads]) where the payloads are
-    every JSON response the page fetched in the background - menus usually travel this way."""
-    from playwright.sync_api import sync_playwright
-
-    payloads = []
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        try:
-            ctx = browser.new_context(
-                user_agent=config.USER_AGENT,
-                locale="en-MY",
-                geolocation={"latitude": 6.0360, "longitude": 116.1297},
-                permissions=["geolocation"],
-            )
-            page = ctx.new_page()
-
-            def on_response(resp):
-                try:
-                    if "json" in (resp.headers.get("content-type") or "") and resp.status == 200:
-                        payloads.append(resp.json())
-                except Exception:
-                    pass
-
-            page.on("response", on_response)
-            page.goto(url, wait_until="domcontentloaded", timeout=45000)
-            try:
-                page.wait_for_load_state("networkidle", timeout=12000)
-            except Exception:
-                pass
-            page.wait_for_timeout(wait_ms)
-            html = page.content()
-        finally:
-            browser.close()
-    return html, payloads
-```
+</details>
 
 ---
 
@@ -653,13 +771,13 @@ def capture(url: str, wait_ms: int = 4000):
 #### Standalone CLI Execution
 ```bash
 # 1. Attach a GrabFood merchant URL to a restaurant
-python -m scraper add-link "Subway Alamesra" "https://food.grab.com/my/en/restaurant/subway-alamesra-delivery/1-C7C2CTJFVCJVA6?"
+PYTHONPATH=scraper scraper/.venv/bin/python -m scraper add-link "Subway Alamesra" "https://food.grab.com/my/en/restaurant/subway-alamesra-delivery/1-C7C2CTJFVCJVA6?"
 
 # 2. Scrape the menu items using the GrabFood extractor
-python -m scraper delivery --only "Subway"
+PYTHONPATH=scraper scraper/.venv/bin/python -m scraper delivery --only "Subway"
 
 # 3. Direct JSON execution via the unified runner
-python -m scraper.runner --url "https://food.grab.com/my/en/restaurant/subway-alamesra-delivery/1-C7C2CTJFVCJVA6?"
+PYTHONPATH=scraper scraper/.venv/bin/python -m scraper.runner --url "https://food.grab.com/my/en/restaurant/subway-alamesra-delivery/1-C7C2CTJFVCJVA6?"
 ```
 
 #### Automated Unit Tests
@@ -676,9 +794,9 @@ PYTHONPATH=scraper scraper/.venv/bin/pytest scraper/tests -k "delivery or price"
 
 | Technology | Purpose |
 |---|---|
-| **React 19** | Core UI library for reactive component rendering and state management |
-| **TypeScript** | Strict type definitions across UI state, API payloads, and analytical data models |
-| **Vite 8** | High-performance build tool, hot module replacement (HMR), and dev server |
+| **React 19** | Core UI library for reactive component rendering, state coordination, and tab routing |
+| **TypeScript 5** | Strict type definitions across UI state, API payloads, and analytical data models |
+| **Vite 8** | High-performance build tool, hot module replacement (HMR), and raw source asset imports (`?raw`) |
 | **Lucide React** | Modern iconography set for navigation, status indicators, and analytical metrics |
 | **Native CSS3** | Custom design system with glassmorphic cards, responsive flex/grid layouts, and theme tokens |
 
@@ -689,7 +807,9 @@ PYTHONPATH=scraper scraper/.venv/bin/pytest scraper/tests -k "delivery or price"
 | **Node.js 20+** | Server execution environment |
 | **node:sqlite** | Native synchronous SQLite database driver for low-latency queries without native binary build dependencies |
 | **Vite Plugin API (`vite-plugin-api.ts`)** | Embedded middleware serving `/api/*` REST endpoints directly from Vite |
+| **Security Middleware (`vite-security.ts`)** | Multi-tiered sliding rate limiting, SSRF guard, concurrency semaphore, and HTTP security headers |
 | **Child Process (`node:child_process`)** | Spawns headless Python scraper runners asynchronously and streams execution logs |
+| **Static Data Exporter (`scripts/export-static-data.js`)** | Generates offline fallback JSON/CSV datasets from `menus.db` for production static hosting |
 
 ### Scraper & Data Extraction Engine
 
@@ -701,12 +821,13 @@ PYTHONPATH=scraper scraper/.venv/bin/pytest scraper/tests -k "delivery or price"
 | **Requests** | HTTP client equipped with custom retry policies, exponential backoff, and timeouts |
 | **pypdf** | Stream reader and text parser for extracting prices from downloadable PDF menus |
 | **PoliteClient** | Custom rate limiter enforcing minimum delays (2.0s per host) and `robots.txt` verification |
+| **Security Module (`scraper/scraper/security.py`)** | SSRF validation, IPv4/IPv6 private IP blocking, safe URL verification, and CLI argument sanitization |
 
 ### Data Persistence & Cloud Services
 
 | Technology | Purpose |
 |---|---|
-| **SQLite 3** | Local relational storage with cascading deletes and composite indexes |
+| **SQLite 3** | Local relational storage with cascading deletes and composite indexes (`menus.db`) |
 | **Google Cloud Firestore** | Scalable NoSQL cloud document database for remote data access |
 | **Firebase Admin SDK** | Node.js and Python SDKs for secure service account authentication and batch document syncing |
 
@@ -714,9 +835,10 @@ PYTHONPATH=scraper scraper/.venv/bin/pytest scraper/tests -k "delivery or price"
 
 | Technology | Purpose |
 |---|---|
-| **Pytest** | Unit testing framework validating parsing logic, price extractors, and database schemas |
+| **Node Test Runner (`node --test`)** | Built-in high-speed unit testing for rate limiters, SSRF filters, DDE sanitization, and API security (27 tests) |
+| **Pytest** | Unit testing framework validating parsing logic, price extractors, and database schemas (20 tests) |
 | **ESLint** | Code linting and quality enforcement for TypeScript and React |
-| **Netlify (`netlify.toml`)** | Production deployment configuration with SPA routing rules |
+| **Netlify (`netlify.toml`)** | Production deployment configuration with static JSON fallback and SPA routing rules |
 
 ---
 
@@ -728,33 +850,38 @@ flowchart TD
         SS["Scraper Studio (Live URL Runner, Presets, Terminal Logs)"]
         AD["Analytics Dashboard (Filters, KPI Stats, CSV/JSON Export)"]
         DM["Data Mining Lab (IQR Outliers, NLP Keywords, Basket Analysis)"]
+        TA["Tech Architecture (Interactive Engine Specs & Code Viewer)"]
     end
 
-    subgraph API ["API Middleware Layer (vite-plugin-api.ts)"]
+    subgraph API ["API Middleware & Security Layer (Vite + Node.js)"]
+        SEC["vite-security.ts (Sliding Rate Limiter, SSRF Guard, Concurrency Semaphore)"]
         R_API["/api/restaurants"]
         I_API["/api/items"]
         A_API["/api/analytics"]
         S_API["/api/scrape"]
         F_API["/api/firebase/*"]
+        E_API["/api/export"]
     end
 
     subgraph WORKER ["Python Scraper Engine"]
         RUNNER["scraper.runner"]
-        DELIVERY["extract_delivery.py (Playwright Headless)"]
+        DELIVERY["extract_delivery.py (Playwright Headless Sniffer)"]
         WEBSITE["extract_website.py (JSON-LD, Regex, pypdf)"]
         DISCOVERY["discovery.py (OSM Overpass / Google Places)"]
         DEDUP["db.py (Haversine & Fuzzy Name Match)"]
+        PSEC["security.py (SSRF Validator)"]
     end
 
     subgraph STORAGE ["Persistence Layer"]
         SQLITE[("SQLite Database: menus.db")]
         FIRESTORE[("Google Cloud Firestore")]
+        STATIC["public/data/*.json (Pre-rendered Static Fallback)"]
     end
 
-    SS -->|Trigger Scrape / Add Link| S_API
-    AD -->|Query Records & Export| R_API & I_API & A_API
-    DM -->|Fetch KPI & Model Stats| A_API
-    SS -->|Trigger Cloud Sync| F_API
+    SS -->|Trigger Scrape / Add Link| SEC --> S_API
+    AD -->|Query Records & Export| SEC --> R_API & I_API & A_API & E_API
+    DM -->|Fetch KPI & Model Stats| SEC --> A_API
+    SS -->|Trigger Cloud Sync| SEC --> F_API
 
     S_API -->|spawn process| RUNNER
     F_API -->|sync command| RUNNER
@@ -764,6 +891,7 @@ flowchart TD
     DELIVERY & WEBSITE & DISCOVERY --> DEDUP
     DEDUP -->|Write / Update| SQLITE
     RUNNER -->|Batch Write| FIRESTORE
+    SQLITE -.->|npm run build| STATIC
 ```
 
 ---
@@ -774,13 +902,13 @@ flowchart TD
 RestaurantScraper/
 ├── src/                               # Frontend React Application
 │   ├── api/
-│   │   └── client.ts                  # Typed client for all /api endpoints
-│   ├── assets/                        # Static brand assets and imagery
+│   │   └── client.ts                  # Typed client for all /api endpoints with static JSON fallback
 │   ├── components/
 │   │   ├── AnalyticsDashboard.tsx     # Dataset browser, faceted filtering, export tools
 │   │   ├── DataMiningLab.tsx          # Anomaly detection, NLP keyword mining, basket analysis
 │   │   ├── Header.tsx                 # Navigation bar, status indicators, refresh trigger
-│   │   └── ScraperStudio.tsx          # Real-time URL runner, presets, venue link manager
+│   │   ├── ScraperStudio.tsx          # Real-time URL runner, presets, venue link manager
+│   │   └── TechArchitecture.tsx       # Interactive architecture specs, topology & code viewer
 │   ├── utils/
 │   │   └── maps.ts                    # Google Maps URL generation helpers
 │   ├── App.css                        # Component stylesheets and responsive layout
@@ -806,19 +934,31 @@ RestaurantScraper/
 │   │   ├── extract_website.py         # JSON-LD, regex price matching, and PDF extractor
 │   │   ├── firebase_db.py             # Firestore adapter and credentials manager
 │   │   ├── http_client.py             # Rate-limited polite HTTP client
-│   │   └── runner.py                  # Standalone CLI runner with stdout JSON formatting
+│   │   ├── runner.py                  # Standalone CLI runner with stdout JSON formatting
+│   │   └── security.py                # SSRF validator, URL safety checks, and input sanitization
 │   ├── tests/
-│   │   └── test_scraper.py            # Pytest test suite for parsing and database logic
+│   │   ├── test_scraper.py            # Unit tests for parsing, deduplication, and SQLite schemas
+│   │   └── test_security.py           # Unit tests for SSRF prevention, IP blocking, and URL parsing
 │   └── requirements.txt               # Python package dependencies
+├── scripts/
+│   └── export-static-data.js          # Pre-exports SQLite data to public/data/ for static builds
+├── tests/
+│   └── security_middleware.test.ts    # Node.js test suite for rate limiting, SSRF, injection defense
+├── public/                            # Static web assets & pre-rendered data exports
+│   └── data/                          # Pre-rendered restaurants.json, items.json, analytics.json
 ├── credentials/                       # Private service account keys (gitignored)
 │   └── serviceAccountKey.json         # Optional Firebase Service Account key file
 ├── .env.example                       # Template for local environment variables
 ├── AGENT.md                           # Operational guidelines and zero-knowledge privacy rules
+├── eslint.config.js                   # ESLint flat configuration
+├── index.html                         # SPA HTML entry point
+├── LICENSE                            # MIT License file
 ├── netlify.toml                       # Netlify deployment and SPA rewrite rules
 ├── package.json                       # Node.js project manifest and scripts
 ├── tsconfig.json                      # TypeScript compiler configuration
 ├── vite.config.ts                     # Vite build configuration
-└── vite-plugin-api.ts                 # Custom Vite API middleware connecting UI with SQLite/Python
+├── vite-plugin-api.ts                 # Custom Vite API middleware connecting UI with SQLite/Python
+└── vite-security.ts                   # Multi-tier sliding rate limiter, SSRF guard & security headers
 ```
 
 ---
@@ -847,7 +987,7 @@ npm install
 
 ### 2. Configure Python Scraper Virtual Environment
 
-Create and activate a virtual environment inside the `scraper/` folder, then install the Python dependencies:
+Create and activate a virtual environment inside the `scraper/` folder, then install the Python dependencies and Playwright Chromium browser:
 
 ```bash
 cd scraper
@@ -903,9 +1043,26 @@ The application will launch at:
 http://localhost:5173
 ```
 
-- Navigate to **Scraper Studio** to run on-demand scrapes or test presets.
-- Open **Analytics Dashboard** to explore items, apply filters, or download CSV/JSON exports.
+- Navigate to **Scraper Studio** to run on-demand scrapes, inject custom metadata, or test presets.
+- Open **Analytics Dashboard** to explore items, apply faceted filters, or download CSV/JSON exports.
 - Visit **Data Mining Lab** to inspect IQR anomaly thresholds, text mining token frequencies, and combo item association rules.
+- View **System Architecture** to inspect live engine code, network interception diagrams, and system topology.
+
+---
+
+### 5. Production Build & Static Deployment
+
+To produce a production build with pre-rendered static datasets:
+
+```bash
+# Exports SQLite data to public/data/*.json, typechecks, and bundles the application
+npm run build
+
+# Preview the built application locally
+npm run preview
+```
+
+When deployed to static hosts (such as Netlify or GitHub Pages), the frontend automatically detects static mode and serves the pre-rendered dataset with full client-side filtering, analytics, and export capabilities.
 
 ---
 
@@ -914,30 +1071,27 @@ http://localhost:5173
 The Python backend can also be operated independently via the command line:
 
 ```bash
-# Activate the virtual environment
-source scraper/.venv/bin/activate
-
 # 1. Discover restaurants from OpenStreetMap or Google Places
-python -m scraper discover --source osm
-python -m scraper discover --source google
+PYTHONPATH=scraper scraper/.venv/bin/python -m scraper discover --source osm
+PYTHONPATH=scraper scraper/.venv/bin/python -m scraper discover --source google
 
 # 2. Scrape restaurant websites found during discovery
-python -m scraper scrape
+PYTHONPATH=scraper scraper/.venv/bin/python -m scraper scrape
 
 # 3. Scrape a specific restaurant with dynamic Chromium rendering
-python -m scraper scrape --only "Subway" --render
+PYTHONPATH=scraper scraper/.venv/bin/python -m scraper scrape --only "Subway" --render
 
 # 4. Attach a GrabFood or foodpanda delivery URL to a restaurant
-python -m scraper add-link "Subway Alamesra" "https://food.grab.com/my/en/restaurant/subway-alamesra-delivery/1-C7C2CTJFVCJVA6?"
+PYTHONPATH=scraper scraper/.venv/bin/python -m scraper add-link "Subway Alamesra" "https://food.grab.com/my/en/restaurant/subway-alamesra-delivery/1-C7C2CTJFVCJVA6?"
 
 # 5. Extract menu items from attached delivery links
-python -m scraper delivery --only "Subway"
+PYTHONPATH=scraper scraper/.venv/bin/python -m scraper delivery --only "Subway"
 
 # 6. Display database statistics in the terminal
-python -m scraper stats
+PYTHONPATH=scraper scraper/.venv/bin/python -m scraper stats
 
 # 7. Export the database to CSV and JSON files in scraper/exports/
-python -m scraper export
+PYTHONPATH=scraper scraper/.venv/bin/python -m scraper export
 
 # 8. Run unit test suite
 PYTHONPATH=scraper scraper/.venv/bin/pytest scraper/tests
@@ -949,23 +1103,23 @@ PYTHONPATH=scraper scraper/.venv/bin/pytest scraper/tests
 
 The Vite API middleware (`vite-plugin-api.ts`) exposes the following endpoints:
 
-| Endpoint | Method | Description | Parameters / Payload |
-|---|---|---|---|
-| `/api/restaurants` | `GET` | Fetches all restaurants with item counts and price aggregations | None |
-| `/api/items` | `GET` | Queries menu items with faceted filtering and pagination | Query: `restaurant_id`, `search`, `category`, `cuisine`, `min_rating`, `area`, `min_price`, `max_price`, `sort`, `limit`, `offset` |
-| `/api/analytics` | `GET` | Computes statistical KPIs, price bins, top categories, NLP keywords, and IQR outliers | None |
-| `/api/scrape` | `POST` | Dispatches the headless scraper to extract a given URL | Body: `{ url, name, rating, cuisine, opening_hours, address, lat, lon, area, render }` |
-| `/api/add-link` | `POST` | Maps a delivery or website link to a restaurant with automatic deduplication | Body: `{ name, url, address, lat, lon, rating, cuisine, opening_hours }` |
-| `/api/update-restaurant` | `POST` | Updates metadata for an existing restaurant entity | Body: `{ id, name, rating, cuisine, opening_hours, address, lat, lon, area }` |
-| `/api/export` | `GET` | Streams dataset file directly to browser | Query: `format=csv` (default) or `format=json` |
-| `/api/firebase/status` | `GET` | Checks if Firestore credentials are configured | None |
-| `/api/firebase/sync` | `POST` | Initiates two-way sync from SQLite to Google Cloud Firestore | None |
+| Endpoint | Method | Rate Limit Tier | Description | Parameters / Payload |
+|---|---|---|---|---|
+| `/api/restaurants` | `GET` | Read (120 req / 60s) | Fetches all restaurants with item counts and price aggregations | None |
+| `/api/items` | `GET` | Read (120 req / 60s) | Queries menu items with faceted filtering and pagination | Query: `restaurant_id`, `search`, `category`, `cuisine`, `min_rating`, `area`, `min_price`, `max_price`, `sort`, `limit`, `offset` |
+| `/api/analytics` | `GET` | Read (120 req / 60s) | Computes statistical KPIs, price bins, top categories, NLP keywords, and IQR outliers | None |
+| `/api/scrape` | `POST` | Scrape (10 req / 60s) | Dispatches the headless scraper to extract a given URL | Body: `{ url, name, rating, cuisine, opening_hours, address, lat, lon, area, render }` |
+| `/api/add-link` | `POST` | Mutation (30 req / 60s) | Maps a delivery or website link to a restaurant with automatic deduplication | Body: `{ name, url, address, lat, lon, rating, cuisine, opening_hours }` |
+| `/api/update-restaurant` | `POST` | Mutation (30 req / 60s) | Updates metadata for an existing restaurant entity | Body: `{ id, name, rating, cuisine, opening_hours, address, lat, lon, area }` |
+| `/api/export` | `GET` | Read (120 req / 60s) | Streams dataset file directly to browser | Query: `format=csv` (default) or `format=json` |
+| `/api/firebase/status` | `GET` | Read (120 req / 60s) | Checks if Firestore credentials are configured | None |
+| `/api/firebase/sync` | `POST` | Scrape (10 req / 60s) | Initiates two-way sync from SQLite to Google Cloud Firestore | None |
 
 ---
 
 ## Security Architecture & Rate Limiting Controls
 
-The system features multi-layered defensive security measures across both the Node.js API middleware and Python backend:
+The system features multi-layered defensive security measures across both the Node.js API middleware (`vite-security.ts`) and Python backend (`scraper/scraper/security.py`):
 
 ### 1. Multi-Tiered Rate Limiting & Concurrency Controls
 - **Sliding-Window In-Memory Limiter**:
@@ -979,7 +1133,7 @@ The system features multi-layered defensive security measures across both the No
 ### 2. Server-Side Request Forgery (SSRF) Defense
 - **Protocol Allowlist**: Restricts input target URLs exclusively to `http:` and `https:`.
 - **IP & Host Blacklisting**: Validates and blocks loopback addresses (`127.0.0.0/8`, `localhost`, `::1`), private networks (RFC 1918: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), and link-local / cloud metadata services (`169.254.0.0/16`, `metadata.google.internal`).
-- Enforced at both the Node API middleware layer and the Python crawler (`PoliteClient`, `runner.py`).
+- Enforced at both the Node API middleware layer and the Python crawler (`PoliteClient`, `runner.py`, `security.py`).
 
 ### 3. CLI Argument & Command Injection Defense
 - All parameters dispatched to Python child processes are sanitized (`sanitizeText`).
@@ -1008,7 +1162,7 @@ The system features multi-layered defensive security measures across both the No
 Run the automated test suites verifying all security controls:
 
 ```bash
-# Run both Node.js API security tests and Python scraper tests
+# Run both Node.js API security tests and Python scraper tests (47 tests)
 npm run test:all
 
 # Run Node.js security & rate limiting tests (27 tests)
